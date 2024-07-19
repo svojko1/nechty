@@ -31,6 +31,8 @@ The `setup.js` script allows you to choose which additional packages to install 
   - React Router
   - Radix Icons
   - shadcn/ui
+ 
+## Include OpenAI/Anthropic? Include Supabase?
 
 ## Note on shadcn/ui
 
