@@ -28,7 +28,7 @@ const installPackage = (packageName) => {
 };
 
 const setupShadcn = () => {
-  console.log("Setting up shadcn/ui with default options...");
+  console.log("Setting up shadcn/ui with predefined options...");
 
   if (!fs.existsSync("jsconfig.json")) {
     console.log("Creating jsconfig.json...");
@@ -50,7 +50,35 @@ const setupShadcn = () => {
   }
 
   try {
-    execSync("npx shadcn-ui@latest init -y", { stdio: "inherit" });
+    // Create a temporary config file for shadcn-ui
+    const tempConfigPath = "shadcn-temp-config.json";
+    fs.writeFileSync(
+      tempConfigPath,
+      JSON.stringify({
+        $schema: "https://ui.shadcn.com/schema.json",
+        style: "default",
+        rsc: false,
+        tsx: false,
+        tailwind: {
+          config: "tailwind.config.js",
+          css: "src/index.css",
+          baseColor: "slate",
+          cssVariables: true,
+        },
+        aliases: {
+          components: "@/components",
+          utils: "@/lib/utils",
+        },
+      })
+    );
+
+    // Run shadcn-ui init with the temporary config file
+    execSync(`npx shadcn-ui@latest init --yes --config ${tempConfigPath}`, {
+      stdio: "inherit",
+    });
+
+    // Remove the temporary config file
+    fs.unlinkSync(tempConfigPath);
 
     const defaultComponents = ["button", "card", "input", "label"];
     defaultComponents.forEach((component) => {
