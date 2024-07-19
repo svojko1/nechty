@@ -5,9 +5,10 @@ This is a customizable boilerplate for React projects with Tailwind CSS and opti
 ## Getting Started
 
 1. Run `git clone https://github.com/svojko1/boilerplate-react-shadcn-tail.git`
-2. Run `npm install`
-3. Run `node setup.js` to customize your project
-4. Start developing with `npm start`
+2. Run `code -r .` 
+3. Run `npm install`
+4. Run `node setup.js` to customize your project
+5. Start developing with `npm start`
 
 ## Available Scripts
 
