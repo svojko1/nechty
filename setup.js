@@ -33,8 +33,8 @@ const setupShadcn = () => {
 
   try {
     // Create necessary directories
-    const directories = ['src/components/ui', 'src/lib'];
-    directories.forEach(dir => {
+    const directories = ["src/components/ui", "src/lib"];
+    directories.forEach((dir) => {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
         console.log(`Created directory: ${dir}`);
@@ -48,7 +48,7 @@ import { twMerge } from "tailwind-merge"
 export function cn(...inputs) {
   return twMerge(clsx(inputs))
 }`;
-    fs.writeFileSync('src/lib/utils.js', utilsContent);
+    fs.writeFileSync("src/lib/utils.js", utilsContent);
     console.log("Created src/lib/utils.js");
 
     // Update tailwind.config.js
@@ -128,7 +128,7 @@ module.exports = {
   },
   plugins: [require("tailwindcss-animate")],
 }`;
-    fs.writeFileSync('tailwind.config.js', tailwindConfig);
+    fs.writeFileSync("tailwind.config.js", tailwindConfig);
     console.log("Updated tailwind.config.js");
 
     // Update src/index.css
@@ -191,7 +191,7 @@ module.exports = {
     @apply bg-background text-foreground;
   }
 }`;
-    fs.writeFileSync('src/index.css', indexCssContent);
+    fs.writeFileSync("src/index.css", indexCssContent);
     console.log("Updated src/index.css");
 
     // Create components.json
@@ -207,16 +207,22 @@ module.exports = {
         cssVariables: true,
       },
       aliases: {
-        components: "@/components",
-        utils: "@/lib/utils"
-      }
+        components: "src/components",
+        utils: "src/lib/utils",
+      },
     };
-    fs.writeFileSync('components.json', JSON.stringify(componentsJson, null, 2));
+    fs.writeFileSync(
+      "components.json",
+      JSON.stringify(componentsJson, null, 2)
+    );
     console.log("Created components.json");
 
     // Install necessary dependencies
     console.log("Installing shadcn/ui dependencies...");
-    execSync('npm install tailwindcss-animate class-variance-authority clsx tailwind-merge', { stdio: "inherit" });
+    execSync(
+      "npm install tailwindcss-animate class-variance-authority clsx tailwind-merge",
+      { stdio: "inherit" }
+    );
 
     // Add default components
     const defaultComponents = ["button", "card", "input", "label"];
