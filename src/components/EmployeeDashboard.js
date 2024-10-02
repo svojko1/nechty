@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import {
   format,
   parseISO,
-  startOfMonth,
-  endOfMonth,
-  isSameDay,
+  isAfter,
+  isBefore,
   addMonths,
   subMonths,
-  isAfter,
+  isSameDay,
+  startOfMonth,
+  endOfMonth,
 } from "date-fns";
 import { sk } from "date-fns/locale";
-import { Calendar } from "./ui/calendar";
-import { Badge } from "./ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 import {
   Table,
   TableBody,
@@ -21,7 +23,18 @@ import {
   TableHeader,
   TableRow,
 } from "./ui/table";
-import { motion, AnimatePresence } from "framer-motion";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "./ui/dialog";
+import { Calendar } from "./ui/calendar";
+import { Badge } from "./ui/badge";
+import { Progress } from "./ui/progress";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import {
   Star,
   DollarSign,
@@ -34,20 +47,9 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import { Progress } from "./ui/progress";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
 import { supabase } from "../supabaseClient";
-import AppointmentTimer from "./AppointmentTimer";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "./ui/dialog";
 import { toast } from "react-hot-toast";
+import AppointmentTimer from "./AppointmentTimer";
 
 function EmployeeDashboard({ session }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -79,23 +81,27 @@ function EmployeeDashboard({ session }) {
 
   useEffect(() => {
     if (appointments.length > 0) {
-      const now = new Date();
-      const current = appointments.find((appointment) => {
-        const start = new Date(appointment.start_time);
-        const end = new Date(appointment.end_time);
-        return isAfter(now, start) && isAfter(end, now);
-      });
-
-      if (current) {
-        setCurrentAppointment(current);
-      } else {
-        const upcoming = appointments.find((appointment) =>
-          isAfter(new Date(appointment.start_time), now)
-        );
-        setCurrentAppointment(upcoming);
-      }
+      updateCurrentAppointment();
     }
   }, [appointments]);
+
+  const updateCurrentAppointment = () => {
+    const now = new Date();
+    const current = appointments.find((appointment) => {
+      const start = new Date(appointment.start_time);
+      const end = new Date(appointment.end_time);
+      return isAfter(now, start) && isBefore(now, end);
+    });
+
+    if (current) {
+      setCurrentAppointment(current);
+    } else {
+      const upcoming = appointments.find((appointment) =>
+        isAfter(new Date(appointment.start_time), now)
+      );
+      setCurrentAppointment(upcoming);
+    }
+  };
 
   const fetchEmployeeData = async () => {
     try {
@@ -303,6 +309,12 @@ function EmployeeDashboard({ session }) {
               </p>
               <p>Služba: {currentAppointment.services.name}</p>
             </div>
+            <Button
+              onClick={() => handleFinishAppointment(currentAppointment)}
+              className="mt-4 bg-green-500 hover:bg-green-600 text-white"
+            >
+              Ukončiť rezerváciu
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -392,69 +404,50 @@ function EmployeeDashboard({ session }) {
                   Rozvrh na{" "}
                   {format(selectedDate, "d. MMMM yyyy", { locale: sk })}
                 </h3>
-                <AnimatePresence>
-                  {filteredAppointments.length > 0 ? (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Čas</TableHead>
-                            <TableHead>Klient</TableHead>
-                            <TableHead>Služba</TableHead>
-                            <TableHead>Akcia</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredAppointments.map((appointment) => (
-                            <TableRow key={appointment.id}>
-                              <TableCell className="font-medium">
-                                {format(
-                                  parseISO(appointment.start_time),
-                                  "HH:mm"
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {getClientDisplay(appointment)}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="secondary">
-                                  {appointment.services.name}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Button
-                                  onClick={() =>
-                                    handleFinishAppointment(appointment)
-                                  }
-                                  className="bg-green-500 hover:bg-green-600 text-white"
-                                  disabled={appointment.status === "completed"}
-                                >
-                                  {appointment.status === "completed"
-                                    ? "Completed"
-                                    : "Finish"}
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </motion.div>
-                  ) : (
-                    <motion.p
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="text-gray-500 italic"
-                    >
-                      Žiadne rezervácie na tento deň.
-                    </motion.p>
-                  )}
-                </AnimatePresence>
+                {filteredAppointments.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Čas</TableHead>
+                        <TableHead>Klient</TableHead>
+                        <TableHead>Služba</TableHead>
+                        <TableHead>Akcia</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredAppointments.map((appointment) => (
+                        <TableRow key={appointment.id}>
+                          <TableCell className="font-medium">
+                            {format(parseISO(appointment.start_time), "HH:mm")}
+                          </TableCell>
+                          <TableCell>{getClientDisplay(appointment)}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">
+                              {appointment.services.name}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              onClick={() =>
+                                handleFinishAppointment(appointment)
+                              }
+                              className="bg-green-500 hover:bg-green-600 text-white"
+                              disabled={appointment.status === "completed"}
+                            >
+                              {appointment.status === "completed"
+                                ? "Completed"
+                                : "Finish"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="text-gray-500 italic">
+                    Žiadne rezervácie na tento deň.
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -526,10 +519,6 @@ function EmployeeDashboard({ session }) {
         <CardContent className="p-6">
           {isLoading ? (
             <p className="text-center text-gray-500">Načítavam rezervácie...</p>
-          ) : appointments === null ? (
-            <p className="text-center text-red-500">
-              Chyba pri načítaní rezervácií. Skúste obnoviť stránku.
-            </p>
           ) : appointments.length > 0 ? (
             <Table>
               <TableHeader>
@@ -544,7 +533,27 @@ function EmployeeDashboard({ session }) {
               <TableBody>
                 {appointments.slice(0, 5).map((appointment) => (
                   <TableRow key={appointment.id}>
-                    {/* ... (rest of the table row content) ... */}
+                    <TableCell>
+                      {format(parseISO(appointment.start_time), "dd.MM.yyyy")}
+                    </TableCell>
+                    <TableCell>
+                      {format(parseISO(appointment.start_time), "HH:mm")}
+                    </TableCell>
+                    <TableCell>{getClientDisplay(appointment)}</TableCell>
+                    <TableCell>{appointment.services.name}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          appointment.status === "completed"
+                            ? "success"
+                            : "default"
+                        }
+                      >
+                        {appointment.status === "completed"
+                          ? "Completed"
+                          : "Scheduled"}
+                      </Badge>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
