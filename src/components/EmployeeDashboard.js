@@ -1,14 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import {
   format,
   parseISO,
   startOfMonth,
   endOfMonth,
-  eachDayOfInterval,
   isSameDay,
   addMonths,
   subMonths,
+  isAfter,
 } from "date-fns";
 import { sk } from "date-fns/locale";
 import { Calendar } from "./ui/calendar";
@@ -36,63 +36,214 @@ import {
 } from "lucide-react";
 import { Progress } from "./ui/progress";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { supabase } from "../supabaseClient";
+import AppointmentTimer from "./AppointmentTimer";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "./ui/dialog";
+import { toast } from "react-hot-toast";
 
-// Mock data for employee schedule and earnings
-const mockSchedule = [
-  {
-    date: "2024-08-14",
-    time: "9:00",
-    client: "Anna Malá",
-    service: "Manikúra",
-  },
-  {
-    date: "2024-08-14",
-    time: "11:00",
-    client: "Ján Veľký",
-    service: "Gélové nechty",
-  },
-  {
-    date: "2024-08-15",
-    time: "10:00",
-    client: "Eva Stredná",
-    service: "Pedikúra",
-  },
-  {
-    date: "2024-08-16",
-    time: "14:00",
-    client: "Mária Nová",
-    service: "Akrylové nechty",
-  },
-  {
-    date: "2024-08-17",
-    time: "13:00",
-    client: "Peter Starý",
-    service: "Manikúra",
-  },
-];
-
-const mockEarnings = 1250; // in euros
-const mockRating = 4.8;
-const mockTotalAppointments = 45;
-const monthlyGoal = 60;
-
-function EmployeeDashboard() {
+function EmployeeDashboard({ session }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showAllAppointments, setShowAllAppointments] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
-
-  const filteredSchedule = mockSchedule.filter(
-    (appointment) =>
-      format(parseISO(appointment.date), "yyyy-MM-dd") ===
-      format(selectedDate, "yyyy-MM-dd")
-  );
-
-  const daysInMonth = eachDayOfInterval({
-    start: startOfMonth(currentMonth),
-    end: endOfMonth(currentMonth),
+  const [appointments, setAppointments] = useState([]);
+  const [employeeStats, setEmployeeStats] = useState({
+    monthlyEarnings: 0,
+    totalAppointments: 0,
+    rating: 0,
+    monthlyGoal: 60,
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentAppointment, setCurrentAppointment] = useState(null);
+  const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
+  const [isConfirmationDialogOpen, setIsConfirmationDialogOpen] =
+    useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [price, setPrice] = useState("");
 
-  const appointmentDays = new Set(mockSchedule.map((a) => a.date));
+  useEffect(() => {
+    if (session && session.user) {
+      console.log("Session detected, fetching data...");
+      fetchEmployeeData();
+      fetchAppointments();
+    } else {
+      console.log("No session, skipping data fetch");
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (appointments.length > 0) {
+      const now = new Date();
+      const current = appointments.find((appointment) => {
+        const start = new Date(appointment.start_time);
+        const end = new Date(appointment.end_time);
+        return isAfter(now, start) && isAfter(end, now);
+      });
+
+      if (current) {
+        setCurrentAppointment(current);
+      } else {
+        const upcoming = appointments.find((appointment) =>
+          isAfter(new Date(appointment.start_time), now)
+        );
+        setCurrentAppointment(upcoming);
+      }
+    }
+  }, [appointments]);
+
+  const fetchEmployeeData = async () => {
+    try {
+      const { data: employeeData, error: employeeError } = await supabase
+        .from("employees")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .single();
+
+      if (employeeError) throw employeeError;
+
+      const startDate = startOfMonth(currentMonth);
+      const endDate = endOfMonth(currentMonth);
+
+      const { data: appointmentsData, error: appointmentsError } =
+        await supabase
+          .from("appointments")
+          .select("*")
+          .eq("employee_id", employeeData.id)
+          .gte("start_time", startDate.toISOString())
+          .lte("start_time", endDate.toISOString());
+
+      if (appointmentsError) throw appointmentsError;
+
+      const monthlyEarnings = appointmentsData.reduce(
+        (sum, appointment) => sum + (appointment.price || 0),
+        0
+      );
+      const totalAppointments = appointmentsData.length;
+
+      const { data: reviewsData, error: reviewsError } = await supabase
+        .from("reviews")
+        .select("rating")
+        .eq("employee_id", employeeData.id);
+
+      if (reviewsError) throw reviewsError;
+
+      const averageRating =
+        reviewsData.reduce((sum, review) => sum + review.rating, 0) /
+          reviewsData.length || 0;
+
+      setEmployeeStats({
+        monthlyEarnings,
+        totalAppointments,
+        rating: averageRating.toFixed(1),
+        monthlyGoal: 60,
+      });
+    } catch (error) {
+      console.error("Error fetching employee data:", error);
+    }
+  };
+
+  const fetchAppointments = async () => {
+    setIsLoading(true);
+    try {
+      console.log("Fetching employee data...");
+      const { data: employeeData, error: employeeError } = await supabase
+        .from("employees")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .single();
+
+      if (employeeError) {
+        console.error("Error fetching employee data:", employeeError);
+        throw employeeError;
+      }
+
+      if (!employeeData) {
+        console.error("No employee data found");
+        throw new Error("No employee data found");
+      }
+
+      console.log("Employee data:", employeeData);
+
+      const now = new Date();
+      const twoMonthsLater = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+
+      console.log("Fetching appointments...");
+      const { data, error } = await supabase
+        .from("appointments")
+        .select(
+          `
+          *,
+          services (name, duration, price)
+        `
+        )
+        .eq("employee_id", employeeData.id)
+        .gte("start_time", now.toISOString())
+        .lte("start_time", twoMonthsLater.toISOString())
+        .order("start_time", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching appointments:", error);
+        throw error;
+      }
+
+      console.log("Appointments fetched:", data);
+      setAppointments(data);
+    } catch (error) {
+      console.error("Error in fetchAppointments:", error);
+      toast.error(`Failed to fetch appointments: ${error.message}`);
+    } finally {
+      console.log("Setting isLoading to false");
+      setIsLoading(false);
+    }
+  };
+
+  const handleFinishAppointment = (appointment) => {
+    setSelectedAppointment(appointment);
+    setPrice(appointment.price ? appointment.price.toString() : "");
+    setIsFinishDialogOpen(true);
+  };
+
+  const handlePriceSubmit = () => {
+    if (!price || isNaN(parseFloat(price))) {
+      toast.error("Please enter a valid price");
+      return;
+    }
+    setIsFinishDialogOpen(false);
+    setIsConfirmationDialogOpen(true);
+  };
+
+  const handleConfirmFinish = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("appointments")
+        .update({
+          status: "completed",
+          price: parseFloat(price),
+          end_time: new Date().toISOString(),
+        })
+        .eq("id", selectedAppointment.id)
+        .select();
+
+      if (error) throw error;
+
+      toast.success("Appointment finished successfully");
+      setIsConfirmationDialogOpen(false);
+      fetchAppointments();
+    } catch (error) {
+      console.error("Error finishing appointment:", error);
+      toast.error("Failed to finish appointment");
+    }
+  };
+
+  const getClientDisplay = (appointment) => {
+    return appointment.email || appointment.phone || "N/A";
+  };
 
   const StatCard = ({ icon: Icon, title, value, change, changeType }) => (
     <Card className="bg-white shadow-xl rounded-lg overflow-hidden">
@@ -122,37 +273,69 @@ function EmployeeDashboard() {
     </Card>
   );
 
+  const filteredAppointments = appointments.filter((appointment) =>
+    isSameDay(parseISO(appointment.start_time), selectedDate)
+  );
+
+  const appointmentDays = new Set(
+    appointments.map((a) => format(parseISO(a.start_time), "yyyy-MM-dd"))
+  );
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">
         Dashboard zamestnanca
       </h1>
+
+      {currentAppointment && (
+        <Card className="mb-6 bg-white shadow-xl rounded-lg overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+            <CardTitle className="text-2xl font-bold flex items-center">
+              <Clock className="mr-2" />
+              Aktuálna rezervácia
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <AppointmentTimer appointment={currentAppointment} />
+            <div className="mt-4">
+              <p className="font-semibold">
+                Klient: {getClientDisplay(currentAppointment)}
+              </p>
+              <p>Služba: {currentAppointment.services.name}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
         <StatCard
           icon={DollarSign}
           title="Mesačný zárobok"
-          value={`${mockEarnings} €`}
+          value={`${employeeStats.monthlyEarnings.toFixed(2)} €`}
           change="5.2"
           changeType="increase"
         />
         <StatCard
           icon={Star}
           title="Hodnotenie"
-          value={mockRating.toFixed(1)}
+          value={employeeStats.rating}
           change="0.3"
           changeType="increase"
         />
         <StatCard
           icon={Users}
           title="Počet rezervácií"
-          value={mockTotalAppointments}
+          value={employeeStats.totalAppointments}
           change="3.1"
           changeType="increase"
         />
         <StatCard
           icon={Briefcase}
           title="Mesačný cieľ"
-          value={`${((mockTotalAppointments / monthlyGoal) * 100).toFixed(0)}%`}
+          value={`${(
+            (employeeStats.totalAppointments / employeeStats.monthlyGoal) *
+            100
+          ).toFixed(0)}%`}
           change="2.5"
           changeType="increase"
         />
@@ -210,7 +393,7 @@ function EmployeeDashboard() {
                   {format(selectedDate, "d. MMMM yyyy", { locale: sk })}
                 </h3>
                 <AnimatePresence>
-                  {filteredSchedule.length > 0 ? (
+                  {filteredAppointments.length > 0 ? (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
@@ -223,19 +406,38 @@ function EmployeeDashboard() {
                             <TableHead>Čas</TableHead>
                             <TableHead>Klient</TableHead>
                             <TableHead>Služba</TableHead>
+                            <TableHead>Akcia</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredSchedule.map((appointment, index) => (
-                            <TableRow key={index}>
+                          {filteredAppointments.map((appointment) => (
+                            <TableRow key={appointment.id}>
                               <TableCell className="font-medium">
-                                {appointment.time}
+                                {format(
+                                  parseISO(appointment.start_time),
+                                  "HH:mm"
+                                )}
                               </TableCell>
-                              <TableCell>{appointment.client}</TableCell>
+                              <TableCell>
+                                {getClientDisplay(appointment)}
+                              </TableCell>
                               <TableCell>
                                 <Badge variant="secondary">
-                                  {appointment.service}
+                                  {appointment.services.name}
                                 </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  onClick={() =>
+                                    handleFinishAppointment(appointment)
+                                  }
+                                  className="bg-green-500 hover:bg-green-600 text-white"
+                                  disabled={appointment.status === "completed"}
+                                >
+                                  {appointment.status === "completed"
+                                    ? "Completed"
+                                    : "Finish"}
+                                </Button>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -269,35 +471,44 @@ function EmployeeDashboard() {
             <div className="flex flex-col space-y-4">
               <div className="text-center">
                 <p className="text-3xl font-bold text-purple-600">
-                  {mockTotalAppointments}
+                  {employeeStats.totalAppointments}
                 </p>
                 <p className="text-gray-600">Celkový počet rezervácií</p>
               </div>
               <div className="w-full">
                 <Progress
-                  value={(mockTotalAppointments / monthlyGoal) * 100}
+                  value={
+                    (employeeStats.totalAppointments /
+                      employeeStats.monthlyGoal) *
+                    100
+                  }
                   className="h-4"
                 />
                 <p className="text-center text-sm text-gray-600 mt-2">
-                  {mockTotalAppointments} z {monthlyGoal} rezervácií tento
-                  mesiac
+                  {employeeStats.monthlyGoal} rezervácií tento mesiac
                 </p>
               </div>
               <div className="mt-4">
                 <h4 className="text-lg font-semibold mb-2">Top služby</h4>
                 <ul className="space-y-2">
-                  <li className="flex justify-between items-center">
-                    <span>Manikúra</span>
-                    <Badge>15</Badge>
-                  </li>
-                  <li className="flex justify-between items-center">
-                    <span>Gélové nechty</span>
-                    <Badge>12</Badge>
-                  </li>
-                  <li className="flex justify-between items-center">
-                    <span>Pedikúra</span>
-                    <Badge>8</Badge>
-                  </li>
+                  {Object.entries(
+                    appointments.reduce((acc, appointment) => {
+                      const serviceName = appointment.services.name;
+                      acc[serviceName] = (acc[serviceName] || 0) + 1;
+                      return acc;
+                    }, {})
+                  )
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3)
+                    .map(([service, count]) => (
+                      <li
+                        key={service}
+                        className="flex justify-between items-center"
+                      >
+                        <span>{service}</span>
+                        <Badge>{count}</Badge>
+                      </li>
+                    ))}
                 </ul>
               </div>
             </div>
@@ -306,88 +517,101 @@ function EmployeeDashboard() {
       </div>
 
       <Card className="mt-6 bg-white shadow-xl rounded-lg overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6 flex justify-between items-center">
+        <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
           <CardTitle className="text-2xl font-bold flex items-center">
             <Clock className="mr-2" />
             Nadchádzajúce rezervácie
           </CardTitle>
-          <Button
-            variant="secondary"
-            onClick={() => setShowAllAppointments(!showAllAppointments)}
-          >
-            {showAllAppointments ? "Skryť" : "Zobraziť všetky"}
-          </Button>
         </CardHeader>
         <CardContent className="p-6">
-          <AnimatePresence>
-            {showAllAppointments ? (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Dátum</TableHead>
-                      <TableHead>Čas</TableHead>
-                      <TableHead>Klient</TableHead>
-                      <TableHead>Služba</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {mockSchedule.map((appointment, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          {format(parseISO(appointment.date), "d. MM. yyyy")}
-                        </TableCell>
-                        <TableCell>{appointment.time}</TableCell>
-                        <TableCell>{appointment.client}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">
-                            {appointment.service}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </motion.div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <ul className="space-y-4">
-                  {mockSchedule.slice(0, 5).map((appointment, index) => (
-                    <li
-                      key={index}
-                      className="flex items-center justify-between border-b pb-2"
-                    >
-                      <div>
-                        <p className="font-medium">{appointment.client}</p>
-                        <p className="text-sm text-gray-500">
-                          {appointment.service}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">
-                          {format(parseISO(appointment.date), "d. MM. yyyy")}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {appointment.time}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {isLoading ? (
+            <p className="text-center text-gray-500">Načítavam rezervácie...</p>
+          ) : appointments === null ? (
+            <p className="text-center text-red-500">
+              Chyba pri načítaní rezervácií. Skúste obnoviť stránku.
+            </p>
+          ) : appointments.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Dátum</TableHead>
+                  <TableHead>Čas</TableHead>
+                  <TableHead>Klient</TableHead>
+                  <TableHead>Služba</TableHead>
+                  <TableHead>Stav</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {appointments.slice(0, 5).map((appointment) => (
+                  <TableRow key={appointment.id}>
+                    {/* ... (rest of the table row content) ... */}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <p className="text-center text-gray-500">
+              Žiadne nadchádzajúce rezervácie.
+            </p>
+          )}
         </CardContent>
       </Card>
+
+      <Dialog open={isFinishDialogOpen} onOpenChange={setIsFinishDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Finish Appointment</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="price">Enter Price</Label>
+            <Input
+              id="price"
+              type="number"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="Enter price"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setIsFinishDialogOpen(false)}
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button onClick={handlePriceSubmit}>Submit</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isConfirmationDialogOpen}
+        onOpenChange={setIsConfirmationDialogOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Appointment Completion</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>Are you sure you want to finish this appointment?</p>
+            <p>Price: {price}€</p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setIsConfirmationDialogOpen(false)}
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmFinish}
+              className="bg-green-500 hover:bg-green-600 text-white"
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

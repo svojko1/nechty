@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import React, { useState, useEffect } from "react";
+import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import {
   BarChart,
   Bar,
@@ -12,8 +12,9 @@ import {
   PieChart,
   Pie,
   Cell,
+  LineChart,
+  Line,
 } from "recharts";
-import { motion } from "framer-motion";
 import {
   DollarSign,
   Users,
@@ -22,7 +23,11 @@ import {
   Calendar,
   ArrowUp,
   ArrowDown,
+  UserPlus,
+  Search,
+  Building,
 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Progress } from "./ui/progress";
 import {
   Select,
@@ -32,7 +37,6 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import {
   Table,
@@ -42,43 +46,358 @@ import {
   TableHeader,
   TableRow,
 } from "./ui/table";
-
-// Mock data for manager dashboard
-const mockRevenueData = [
-  { month: "Jan", revenue: 4000 },
-  { month: "Feb", revenue: 3000 },
-  { month: "Mar", revenue: 5000 },
-  { month: "Apr", revenue: 4500 },
-  { month: "May", revenue: 6000 },
-  { month: "Jun", revenue: 5500 },
-];
-
-const mockEmployeePerformance = [
-  { name: "Jana Nováková", bookings: 45, rating: 4.8, avatar: "/jana.jpg" },
-  { name: "Peter Svoboda", bookings: 38, rating: 4.6, avatar: "/peter.jpg" },
-  { name: "Mária Kováčová", bookings: 42, rating: 4.9, avatar: "/maria.jpg" },
-];
-
-const mockServicePopularity = [
-  { name: "Manikúra", value: 30 },
-  { name: "Pedikúra", value: 25 },
-  { name: "Gélové nechty", value: 35 },
-  { name: "Akrylové nechty", value: 10 },
-];
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Input } from "./ui/input";
+import EmployeeRegistration from "./EmployeeRegistration";
+import { supabase } from "../supabaseClient";
 
 const COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A"];
 
-function ManagerDashboard() {
+const ManagerDashboard = () => {
   const [selectedTimeRange, setSelectedTimeRange] = useState("month");
+  const [isLoading, setIsLoading] = useState(true);
 
-  const totalRevenue = mockRevenueData.reduce(
-    (sum, item) => sum + item.revenue,
-    0
+  const [selectedFacility, setSelectedFacility] = useState("all");
+  const [isEmployeeRegistrationOpen, setIsEmployeeRegistrationOpen] =
+    useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [dashboardData, setDashboardData] = useState({
+    revenueData: [],
+    employeePerformance: [],
+    servicePopularity: [],
+    upcomingAppointments: [],
+    totalRevenue: 0,
+    totalBookings: 0,
+    averagePrice: 0,
+    customerSatisfaction: 0,
+    appointments: [],
+    facilities: [],
+    facilityComparison: [],
+  });
+  const [facilities, setFacilities] = useState([]);
+
+  useEffect(() => {
+    fetchFacilities();
+  }, []);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [selectedTimeRange, selectedFacility]);
+
+  const fetchDashboardData = async () => {
+    setIsLoading(true);
+    const endDate = new Date();
+    const startDate = getStartDate(selectedTimeRange, endDate);
+
+    try {
+      const [
+        revenueData,
+        employeePerformance,
+        servicePopularity,
+        upcomingAppointments,
+        appointments,
+      ] = await Promise.all([
+        fetchRevenueData(startDate, endDate),
+        fetchEmployeePerformance(startDate, endDate),
+        fetchServicePopularity(startDate, endDate),
+        fetchUpcomingAppointments(),
+        fetchAllAppointments(),
+      ]);
+
+      // Calculate totals and averages
+      const totalRevenue = revenueData.reduce(
+        (sum, item) => sum + item.revenue,
+        0
+      );
+      const totalBookings = revenueData.reduce(
+        (sum, item) => sum + item.bookings,
+        0
+      );
+      const averagePrice = totalBookings > 0 ? totalRevenue / totalBookings : 0;
+      const customerSatisfaction =
+        calculateCustomerSatisfaction(employeePerformance);
+
+      setDashboardData({
+        revenueData,
+        employeePerformance,
+        servicePopularity,
+        upcomingAppointments,
+        appointments,
+        totalRevenue,
+        totalBookings,
+        averagePrice,
+        customerSatisfaction,
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchFacilities = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("facilities")
+        .select("id, name");
+
+      if (error) throw error;
+      setFacilities(data || []);
+    } catch (error) {
+      console.error("Error fetching facilities:", error);
+    }
+  };
+
+  const fetchFacilityComparison = async (startDate, endDate) => {
+    const { data, error } = await supabase
+      .from("appointments")
+      .select(
+        `
+        id, start_time, price,
+        facilities (id, name)
+      `
+      )
+      .gte("start_time", startDate.toISOString())
+      .lte("start_time", endDate.toISOString());
+
+    if (error) {
+      console.error("Error fetching facility comparison:", error);
+      return [];
+    }
+
+    const facilityData = data.reduce((acc, appointment) => {
+      const facilityId = appointment.facilities.id;
+      const facilityName = appointment.facilities.name;
+      if (!acc[facilityId]) {
+        acc[facilityId] = { name: facilityName, revenue: 0, bookings: 0 };
+      }
+      acc[facilityId].revenue += appointment.price;
+      acc[facilityId].bookings += 1;
+      return acc;
+    }, {});
+
+    return Object.values(facilityData);
+  };
+
+  const getStartDate = (range, endDate) => {
+    switch (range) {
+      case "week":
+        return new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+      case "month":
+        return startOfMonth(subMonths(endDate, 1));
+      case "quarter":
+        return new Date(endDate.getTime() - 3 * 30 * 24 * 60 * 60 * 1000);
+      case "year":
+        return new Date(
+          endDate.getFullYear() - 1,
+          endDate.getMonth(),
+          endDate.getDate()
+        );
+      default:
+        return startOfMonth(subMonths(endDate, 1));
+    }
+  };
+
+  const fetchRevenueData = async (startDate, endDate) => {
+    let query = supabase
+      .from("appointments")
+      .select("start_time, price, facility_id")
+      .gte("start_time", startDate.toISOString())
+      .lte("start_time", endDate.toISOString());
+
+    if (selectedFacility !== "all") {
+      query = query.eq("facility_id", selectedFacility);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    return Object.entries(
+      data.reduce((acc, appointment) => {
+        const month = format(new Date(appointment.start_time), "MMM");
+        if (!acc[month]) acc[month] = { revenue: 0, bookings: 0 };
+        acc[month].revenue += appointment.price;
+        acc[month].bookings += 1;
+        return acc;
+      }, {})
+    ).map(([month, { revenue, bookings }]) => ({ month, revenue, bookings }));
+  };
+
+  const fetchEmployeePerformance = async (startDate, endDate) => {
+    let query = supabase
+      .from("appointments")
+      .select(
+        `
+        id, employee_id, service_id, start_time, end_time, price, status, facility_id,
+        employees (id, users (first_name, last_name)),
+        services (name)
+      `
+      )
+      .gte("start_time", startDate.toISOString())
+      .lte("start_time", endDate.toISOString());
+
+    if (selectedFacility !== "all") {
+      query = query.eq("facility_id", selectedFacility);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    const employeeStats = data.reduce((acc, appointment) => {
+      const employeeId = appointment.employee_id;
+      if (!acc[employeeId]) {
+        acc[employeeId] = {
+          name: `${appointment.employees.users.first_name} ${appointment.employees.users.last_name}`,
+          bookings: 0,
+          revenue: 0,
+          services: {},
+        };
+      }
+      acc[employeeId].bookings += 1;
+      acc[employeeId].revenue += appointment.price;
+      const serviceName = appointment.services.name;
+      acc[employeeId].services[serviceName] =
+        (acc[employeeId].services[serviceName] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.values(employeeStats).map((employee) => ({
+      ...employee,
+      topService: Object.entries(employee.services).reduce((a, b) =>
+        a[1] > b[1] ? a : b
+      )[0],
+    }));
+  };
+
+  const fetchServicePopularity = async (startDate, endDate) => {
+    let query = supabase
+      .from("appointments")
+      .select("service_id, services (name), facility_id")
+      .gte("start_time", startDate.toISOString())
+      .lte("start_time", endDate.toISOString());
+
+    if (selectedFacility !== "all") {
+      query = query.eq("facility_id", selectedFacility);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    const serviceCounts = data.reduce((acc, appointment) => {
+      const serviceName = appointment.services.name;
+      acc[serviceName] = (acc[serviceName] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(serviceCounts).map(([name, value]) => ({
+      name,
+      value,
+    }));
+  };
+
+  const fetchUpcomingAppointments = async () => {
+    let query = supabase
+      .from("appointments")
+      .select(
+        `
+        id, start_time, facility_id,
+        services (name),
+        employees (users (first_name, last_name))
+      `
+      )
+      .gte("start_time", new Date().toISOString())
+      .order("start_time")
+      .limit(5);
+
+    if (selectedFacility !== "all") {
+      query = query.eq("facility_id", selectedFacility);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    return data;
+  };
+
+  const fetchAllAppointments = async () => {
+    let query = supabase
+      .from("appointments")
+      .select(
+        `
+        id, start_time, end_time, status, notes, email, phone, price, facility_id,
+        services (name),
+        employees (users (first_name, last_name))
+      `
+      )
+      .order("start_time", { ascending: false });
+
+    if (selectedFacility !== "all") {
+      query = query.eq("facility_id", selectedFacility);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    return data;
+  };
+
+  const calculateCustomerSatisfaction = (employeePerformance) => {
+    const totalRatings = employeePerformance.reduce(
+      (sum, employee) => sum + (employee.ratings ? employee.ratings.length : 0),
+      0
+    );
+    const sumRatings = employeePerformance.reduce(
+      (sum, employee) =>
+        sum +
+        (employee.ratings ? employee.ratings.reduce((a, b) => a + b, 0) : 0),
+      0
+    );
+    const averageRating = totalRatings > 0 ? sumRatings / totalRatings : 0;
+    return ((averageRating / 5) * 100).toFixed(1);
+  };
+
+  const groupAppointmentsByCustomer = (appointments) => {
+    return appointments.reduce((acc, appointment) => {
+      const key = appointment.email || appointment.phone;
+      if (!acc[key]) {
+        acc[key] = {
+          email: appointment.email,
+          phone: appointment.phone,
+          appointments: [],
+          totalAppointments: 0,
+          totalSpent: 0,
+        };
+      }
+      acc[key].appointments.push(appointment);
+      acc[key].totalAppointments += 1;
+      acc[key].totalSpent += appointment.price || 0;
+      return acc;
+    }, {});
+  };
+
+  const filteredAppointments = dashboardData.appointments.filter(
+    (appointment) =>
+      appointment.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      appointment.phone?.includes(searchTerm) ||
+      appointment.services?.name
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase())
   );
-  const totalBookings = mockEmployeePerformance.reduce(
-    (sum, employee) => sum + employee.bookings,
-    0
-  );
+
+  const groupedAppointments = groupAppointmentsByCustomer(filteredAppointments);
 
   const StatCard = ({ icon: Icon, title, value, change, changeType }) => (
     <Card className="bg-white shadow-xl rounded-lg overflow-hidden">
@@ -113,48 +432,86 @@ function ManagerDashboard() {
           <h1 className="text-3xl font-bold text-gray-800">
             Dashboard manažéra
           </h1>
-          <Select
-            value={selectedTimeRange}
-            onValueChange={setSelectedTimeRange}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Vyberte časové obdobie" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="week">Týždeň</SelectItem>
-              <SelectItem value="month">Mesiac</SelectItem>
-              <SelectItem value="quarter">Štvrťrok</SelectItem>
-              <SelectItem value="year">Rok</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center space-x-4">
+            <Select
+              value={selectedTimeRange}
+              onValueChange={setSelectedTimeRange}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Vyberte časové obdobie" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="week">Týždeň</SelectItem>
+                <SelectItem value="month">Mesiac</SelectItem>
+                <SelectItem value="quarter">Štvrťrok</SelectItem>
+                <SelectItem value="year">Rok</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={selectedFacility}
+              onValueChange={setSelectedFacility}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Vyberte zariadenie" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Všetky zariadenia</SelectItem>
+                {facilities.map((facility) => (
+                  <SelectItem key={facility.id} value={facility.id}>
+                    {facility.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Dialog
+              open={isEmployeeRegistrationOpen}
+              onOpenChange={setIsEmployeeRegistrationOpen}
+            >
+              <DialogTrigger asChild>
+                <Button className="bg-pink-500 hover:bg-pink-600 text-white">
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Add Employee
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Add New Employee</DialogTitle>
+                  <DialogDescription>
+                    Create a new account for an employee here.
+                  </DialogDescription>
+                </DialogHeader>
+                <EmployeeRegistration />
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <StatCard
             icon={DollarSign}
             title="Celkové tržby"
-            value={`${totalRevenue} €`}
+            value={`${dashboardData.totalRevenue.toFixed(2)} €`}
             change="5.2"
             changeType="increase"
           />
           <StatCard
             icon={Users}
             title="Celkové rezervácie"
-            value={totalBookings}
+            value={dashboardData.totalBookings}
             change="3.1"
             changeType="increase"
           />
           <StatCard
             icon={TrendingUp}
             title="Priemerná cena"
-            value={`${(totalRevenue / totalBookings).toFixed(2)} €`}
+            value={`${dashboardData.averagePrice.toFixed(2)} €`}
             change="1.5"
             changeType="increase"
           />
           <StatCard
             icon={Award}
             title="Spokojnosť zákazníkov"
-            value="94%"
+            value={`${dashboardData.customerSatisfaction}%`}
             change="0.8"
             changeType="decrease"
           />
@@ -169,7 +526,7 @@ function ManagerDashboard() {
             </CardHeader>
             <CardContent className="p-6">
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={mockRevenueData}>
+                <BarChart data={dashboardData.revenueData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
@@ -191,7 +548,7 @@ function ManagerDashboard() {
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={mockServicePopularity}
+                    data={dashboardData.servicePopularity}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
@@ -202,7 +559,7 @@ function ManagerDashboard() {
                       `${name} ${(percent * 100).toFixed(0)}%`
                     }
                   >
-                    {mockServicePopularity.map((entry, index) => (
+                    {dashboardData.servicePopularity.map((entry, index) => (
                       <Cell
                         key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}
@@ -228,12 +585,13 @@ function ManagerDashboard() {
                 <TableRow>
                   <TableHead>Zamestnanec</TableHead>
                   <TableHead>Rezervácie</TableHead>
-                  <TableHead>Hodnotenie</TableHead>
+                  <TableHead>Tržby</TableHead>
+                  <TableHead>Najčastejšia služba</TableHead>
                   <TableHead>Výkon</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {mockEmployeePerformance.map((employee, index) => (
+                {dashboardData.employeePerformance.map((employee, index) => (
                   <TableRow key={index}>
                     <TableCell className="font-medium">
                       <div className="flex items-center">
@@ -250,32 +608,16 @@ function ManagerDashboard() {
                       </div>
                     </TableCell>
                     <TableCell>{employee.bookings}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center">
-                        <span className="mr-2">{employee.rating}</span>
-                        {[...Array(5)].map((_, i) => (
-                          <Award
-                            key={i}
-                            className={`w-4 h-4 ${
-                              i < Math.floor(employee.rating)
-                                ? "text-yellow-500"
-                                : "text-gray-300"
-                            }`}
-                            fill={
-                              i < Math.floor(employee.rating)
-                                ? "currentColor"
-                                : "none"
-                            }
-                          />
-                        ))}
-                      </div>
-                    </TableCell>
+                    <TableCell>{employee.revenue.toFixed(2)} €</TableCell>
+                    <TableCell>{employee.topService}</TableCell>
                     <TableCell>
                       <Progress
                         value={
                           (employee.bookings /
                             Math.max(
-                              ...mockEmployeePerformance.map((e) => e.bookings)
+                              ...dashboardData.employeePerformance.map(
+                                (e) => e.bookings
+                              )
                             )) *
                           100
                         }
@@ -289,6 +631,70 @@ function ManagerDashboard() {
           </CardContent>
         </Card>
 
+        <Card className="bg-white shadow-xl rounded-lg overflow-hidden mb-6">
+          <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+            <CardTitle className="text-2xl font-bold">
+              Appointments and Customers
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <Tabs defaultValue="appointments">
+              <TabsList className="mb-4">
+                <TabsTrigger value="appointments">Appointments</TabsTrigger>
+              </TabsList>
+              <div className="mb-4 flex items-center">
+                <Search className="w-5 h-5 text-gray-400 mr-2" />
+                <Input
+                  placeholder="Search appointments..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="flex-grow"
+                />
+              </div>
+              <TabsContent value="appointments">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Email/Phone</TableHead>
+                        <TableHead>Total Appointments</TableHead>
+                        <TableHead>Total Spent</TableHead>
+                        <TableHead>Last Appointment</TableHead>
+                        <TableHead>Last Service</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.values(groupedAppointments).map((customer) => (
+                        <TableRow key={customer.email || customer.phone}>
+                          <TableCell>
+                            <div>{customer.email || "N/A"}</div>
+                            <div className="text-sm text-gray-500">
+                              {customer.phone || "N/A"}
+                            </div>
+                          </TableCell>
+                          <TableCell>{customer.totalAppointments}</TableCell>
+                          <TableCell>
+                            {customer.totalSpent.toFixed(2)} €
+                          </TableCell>
+                          <TableCell>
+                            {format(
+                              new Date(customer.appointments[0].start_time),
+                              "dd.MM.yyyy HH:mm"
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {customer.appointments[0].services.name}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+
         <Card className="bg-white shadow-xl rounded-lg overflow-hidden">
           <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
             <CardTitle className="text-2xl font-bold">
@@ -297,7 +703,7 @@ function ManagerDashboard() {
           </CardHeader>
           <CardContent className="p-6">
             <div className="space-y-4">
-              {[...Array(5)].map((_, index) => (
+              {dashboardData.upcomingAppointments.map((appointment, index) => (
                 <div
                   key={index}
                   className="flex items-center justify-between border-b pb-4"
@@ -305,13 +711,22 @@ function ManagerDashboard() {
                   <div className="flex items-center">
                     <Calendar className="h-10 w-10 text-pink-500 mr-3" />
                     <div>
-                      <p className="font-medium">Manikúra</p>
-                      <p className="text-sm text-gray-500">Jana Nováková</p>
+                      <p className="font-medium">{appointment.services.name}</p>
+                      <p className="text-sm text-gray-500">
+                        {`${appointment.employees.users.first_name} ${appointment.employees.users.last_name}`}
+                      </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium">14. August 2024</p>
-                    <p className="text-sm text-gray-500">10:00</p>
+                    <p className="font-medium">
+                      {format(
+                        new Date(appointment.start_time),
+                        "dd. MMMM yyyy"
+                      )}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {format(new Date(appointment.start_time), "HH:mm")}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -324,6 +739,6 @@ function ManagerDashboard() {
       </div>
     </div>
   );
-}
+};
 
 export default ManagerDashboard;

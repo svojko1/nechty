@@ -1,27 +1,23 @@
 import React, { useState, useEffect } from "react";
+import ReceptionDashboard from "./components/ReceptionDashboard";
+
 import {
   BrowserRouter as Router,
   Route,
   Routes,
+  Navigate,
   Link,
   useLocation,
 } from "react-router-dom";
+
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./components/ui/button";
 import {
   NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuItem,
-  NavigationMenuLink,
   NavigationMenuList,
-  NavigationMenuTrigger,
+  NavigationMenuItem,
 } from "./components/ui/navigation-menu";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./components/ui/dropdown-menu";
+import CheckIn from "./components/CheckIn";
 import {
   Sparkles,
   Menu,
@@ -29,45 +25,24 @@ import {
   Instagram,
   Facebook,
   Twitter,
-  Sun,
-  Moon,
-  User,
-  Settings,
   Calendar,
   Users,
   BarChart,
   Star,
+  LogIn,
+  LogOut,
+  Settings,
 } from "lucide-react";
 import { ScrollArea } from "./components/ui/scroll-area";
 import { cn } from "./lib/utils";
+import { supabase } from "./supabaseClient";
 
 import BookingSystem from "./components/BookingSystem";
 import ManagerDashboard from "./components/ManagerDashboard";
 import EmployeeDashboard from "./components/EmployeeDashboard";
 import FeedbackPage from "./components/FeedbackSystem";
-
-const services = [
-  {
-    name: "Manikúra",
-    description: "Klasická manikúra s lakom podľa výberu",
-    icon: "💅",
-  },
-  {
-    name: "Pedikúra",
-    description: "Relaxačná pedikúra s masážou chodidiel",
-    icon: "👣",
-  },
-  {
-    name: "Gélové nechty",
-    description: "Modeláž gélových nechtov s dizajnom",
-    icon: "✨",
-  },
-  {
-    name: "Akrylové nechty",
-    description: "Profesionálna modeláž akrylových nechtov",
-    icon: "💎",
-  },
-];
+import AuthForm from "./components/AuthForm";
+import AdminDashboard from "./components/AdminDashboard";
 
 const NavLink = ({ to, children, icon: Icon }) => {
   const location = useLocation();
@@ -94,6 +69,8 @@ const NavLink = ({ to, children, icon: Icon }) => {
 function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrollY, setScrollY] = useState(0);
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -111,6 +88,34 @@ function App() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-pink-50 to-purple-50">
+        <div className="text-2xl font-bold text-pink-600">Načítava sa...</div>
+      </div>
+    );
+  }
 
   const headerClass = scrollY > 50 ? "py-2 shadow-lg" : "py-4";
 
@@ -138,21 +143,44 @@ function App() {
                         Rezervácie
                       </NavLink>
                     </NavigationMenuItem>
-                    <NavigationMenuItem>
-                      <NavLink to="/zamestnanec" icon={Users}>
-                        Zamestnanec
-                      </NavLink>
-                    </NavigationMenuItem>
-                    <NavigationMenuItem>
-                      <NavLink to="/manazer" icon={BarChart}>
-                        Manažér
-                      </NavLink>
-                    </NavigationMenuItem>
-                    <NavigationMenuItem>
-                      <NavLink to="/feedback" icon={Star}>
-                        Hodnotenie
-                      </NavLink>
-                    </NavigationMenuItem>
+                    {session ? (
+                      <>
+                        <NavigationMenuItem>
+                          <NavLink to="/zamestnanec" icon={Users}>
+                            Zamestnanec
+                          </NavLink>
+                        </NavigationMenuItem>
+                        <NavigationMenuItem>
+                          <NavLink to="/manazer" icon={BarChart}>
+                            Manažér
+                          </NavLink>
+                        </NavigationMenuItem>
+                        <NavigationMenuItem>
+                          <NavLink to="/feedback" icon={Star}>
+                            Hodnotenie
+                          </NavLink>
+                        </NavigationMenuItem>
+
+                        <NavigationMenuItem>
+                          <NavLink to="/admin" icon={Settings}>
+                            Admin
+                          </NavLink>
+                        </NavigationMenuItem>
+
+                        <NavigationMenuItem>
+                          <Button onClick={handleLogout} variant="ghost">
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Odhlásiť sa
+                          </Button>
+                        </NavigationMenuItem>
+                      </>
+                    ) : (
+                      <NavigationMenuItem>
+                        <NavLink to="/login" icon={LogIn}>
+                          Prihlásenie
+                        </NavLink>
+                      </NavigationMenuItem>
+                    )}
                   </NavigationMenuList>
                 </NavigationMenu>
               </div>
@@ -183,32 +211,48 @@ function App() {
                         Rezervácie
                       </NavLink>
                     </li>
-                    <li>
-                      <NavLink to="/zamestnanec" icon={Users}>
-                        Zamestnanec
-                      </NavLink>
-                    </li>
-                    <li>
-                      <NavLink to="/manazer" icon={BarChart}>
-                        Manažér
-                      </NavLink>
-                    </li>
-                    <li>
-                      <NavLink to="/feedback" icon={Star}>
-                        Hodnotenie
-                      </NavLink>
-                    </li>
-                    {services.map((service) => (
-                      <li key={service.name}>
-                        <Button
-                          variant="ghost"
-                          className="w-full justify-start text-left"
-                        >
-                          <span className="mr-2">{service.icon}</span>
-                          {service.name}
-                        </Button>
+                    {session ? (
+                      <>
+                        <li>
+                          <NavLink to="/zamestnanec" icon={Users}>
+                            Zamestnanec
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/manazer" icon={BarChart}>
+                            Manažér
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/feedback" icon={Star}>
+                            Hodnotenie
+                          </NavLink>
+                        </li>
+
+                        <li>
+                          <NavLink to="/admin" icon={Settings}>
+                            Admin
+                          </NavLink>
+                        </li>
+
+                        <li>
+                          <Button
+                            onClick={handleLogout}
+                            variant="ghost"
+                            className="w-full justify-start"
+                          >
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Odhlásiť sa
+                          </Button>
+                        </li>
+                      </>
+                    ) : (
+                      <li>
+                        <NavLink to="/login" icon={LogIn}>
+                          Prihlásenie
+                        </NavLink>
                       </li>
-                    ))}
+                    )}
                   </ul>
                 </nav>
               </ScrollArea>
@@ -216,66 +260,32 @@ function App() {
           )}
         </AnimatePresence>
 
-        <main className="container mx-auto mt-8 p-4 flex-grow">
+        <main className="container justify-center items-center mx-auto mt-8 p-4 flex-grow flex ">
           <Routes>
             <Route path="/" element={<BookingSystem />} />
-            <Route path="/zamestnanec" element={<EmployeeDashboard />} />
-            <Route path="/manazer" element={<ManagerDashboard />} />
-            <Route path="/feedback" element={<FeedbackPage />} />
+            <Route path="/checkin" element={<CheckIn />} />
+            {session ? (
+              <>
+                <Route
+                  path="/zamestnanec"
+                  element={<EmployeeDashboard session={session} />}
+                />
+                <Route path="/manazer" element={<ManagerDashboard />} />
+                <Route path="/reception" element={<ReceptionDashboard />} />
+
+                <Route path="/feedback" element={<FeedbackPage />} />
+
+                <Route path="/admin" element={<AdminDashboard />} />
+              </>
+            ) : (
+              <Route
+                path="/login"
+                element={<AuthForm setSession={setSession} />}
+              />
+            )}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
-
-        <footer className="bg-gradient-to-r from-pink-500 to-purple-600 dark:from-pink-800 dark:to-purple-900 text-white mt-12 py-8">
-          <div className="container mx-auto px-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div>
-                <h2 className="text-2xl font-bold mb-4">Glam Nails</h2>
-                <p className="text-pink-100 dark:text-pink-200">
-                  Vaše krásne nechty sú našou prioritou. Navštívte nás a
-                  doprajte si luxusnú starostlivosť.
-                </p>
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold mb-4">Kontakt</h3>
-                <p className="text-pink-100 dark:text-pink-200">
-                  123 Hlavná ulica
-                  <br />
-                  Bratislava, 81101
-                  <br />
-                  Tel: +421 123 456 789
-                  <br />
-                  Email: info@glamnails.sk
-                </p>
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold mb-4">Sledujte nás</h3>
-                <div className="flex space-x-4">
-                  <a
-                    href="#"
-                    className="text-white hover:text-pink-200 transition-colors"
-                  >
-                    <Instagram />
-                  </a>
-                  <a
-                    href="#"
-                    className="text-white hover:text-pink-200 transition-colors"
-                  >
-                    <Facebook />
-                  </a>
-                  <a
-                    href="#"
-                    className="text-white hover:text-pink-200 transition-colors"
-                  >
-                    <Twitter />
-                  </a>
-                </div>
-              </div>
-            </div>
-            <div className="mt-8 text-center text-pink-100 dark:text-pink-200">
-              <p>&copy; 2024 Glam Nails. Všetky práva vyhradené.</p>
-            </div>
-          </div>
-        </footer>
       </div>
     </Router>
   );
