@@ -53,7 +53,7 @@ const NavLink = ({ to, children, icon: Icon }) => {
   const isActive = location.pathname === to;
 
   return (
-    <Link to={to}>
+    <a href={to}>
       <Button
         variant={isActive ? "default" : "ghost"}
         className={cn(
@@ -66,7 +66,7 @@ const NavLink = ({ to, children, icon: Icon }) => {
         <Icon className="mr-2 h-4 w-4" />
         {children}
       </Button>
-    </Link>
+    </a>
   );
 };
 

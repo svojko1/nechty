@@ -726,7 +726,7 @@ function BookingSystem({ facilityId }) {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className=" w-full max-w-3xl mx-auto">
       <Toaster position="top-center" reverseOrder={false} />
       <Card className="w-full max-w-4xl mx-auto bg-white shadow-2xl rounded-lg overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">

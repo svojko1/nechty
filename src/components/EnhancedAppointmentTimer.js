@@ -125,11 +125,15 @@ const EnhancedAppointmentTimer = ({ appointment }) => {
   };
 
   const renderTimer = () => {
+    const timerClasses = isFullscreen
+      ? "text-6xl font-bold"
+      : "text-2xl font-bold";
+
     if (status === "upcoming") {
       return (
         <div className="text-center mt-2">
           <p className="text-sm font-medium">Začína za</p>
-          <p className="text-2xl font-bold">{formatTime(timeLeft)}</p>
+          <p className={timerClasses}>{formatTime(timeLeft)}</p>
         </div>
       );
     } else {
@@ -138,7 +142,7 @@ const EnhancedAppointmentTimer = ({ appointment }) => {
           <p className="text-sm font-medium">
             {status === "in-progress" ? "Zostáva" : "Prekročené o"}
           </p>
-          <p className="text-2xl font-bold">
+          <p className={timerClasses}>
             {status === "in-progress" ? "" : "+"}
             {formatTime(timeLeft)}
           </p>
@@ -171,7 +175,12 @@ const EnhancedAppointmentTimer = ({ appointment }) => {
       <CardContent className={`p-4 ${isFullscreen ? "text-center" : ""}`}>
         <div className="flex justify-between items-center mb-2">
           <h3 className="text-lg font-semibold">{getStatusText()}</h3>
-          <Button variant="ghost" size="sm" onClick={toggleFullscreen}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleFullscreen}
+            className={isFullscreen ? "absolute top-2 right-2" : ""}
+          >
             {isFullscreen ? (
               <Minimize2 className="h-4 w-4" />
             ) : (
@@ -184,7 +193,6 @@ const EnhancedAppointmentTimer = ({ appointment }) => {
         {isFullscreen && (
           <div className="mt-4">
             <p className="text-xl font-semibold">{appointment.services.name}</p>
-            <p className="text-lg">{appointment.customer_name}</p>
           </div>
         )}
       </CardContent>
