@@ -33,42 +33,45 @@ import useDebounce from "../utils/useDebounce";
 const steps = ["Služba", "Zamestnanec", "Dátum", "Čas", "Potvrdenie"];
 
 const Stepper = ({ currentStep }) => (
-  <div className="flex justify-between mb-8">
+  <div className="flex items-center justify-between mb-8 px-2 overflow-x-auto">
     {steps.map((step, index) => (
-      <div
-        key={step}
-        className={`flex flex-col items-center ${
-          index <= currentStep ? "text-pink-600" : "text-gray-400"
-        }`}
-      >
-        <div
-          className={`rounded-full transition duration-500 ease-in-out h-8 w-8 flex items-center justify-center ${
-            index < currentStep
-              ? "bg-pink-600 text-white"
-              : index === currentStep
-              ? "border-2 border-pink-600 text-pink-600"
-              : "border-2 border-gray-300"
-          }`}
-        >
-          {index < currentStep ? (
-            <CheckCircle className="w-5 h-5" />
-          ) : (
-            index + 1
-          )}
+      <div key={step} className="flex items-center">
+        <div className="relative">
+          <div
+            className={`w-8 h-8 flex items-center justify-center rounded-full border-2 transition-colors duration-300 ${
+              index <= currentStep
+                ? "border-pink-500 bg-pink-500 text-white"
+                : "border-gray-300 text-gray-300"
+            }`}
+          >
+            {index < currentStep ? (
+              <CheckCircle className="w-5 h-5" />
+            ) : (
+              <span className="text-sm font-semibold">{index + 1}</span>
+            )}
+          </div>
         </div>
-        <div className="text-xs font-medium mt-2">{step}</div>
+        <div className="ml-3 hidden sm:block">
+          <p
+            className={`text-xs font-medium transition-colors duration-300 ${
+              index <= currentStep ? "text-pink-600" : "text-gray-500"
+            }`}
+          >
+            {step}
+          </p>
+        </div>
       </div>
     ))}
   </div>
 );
 
 const SelectionGrid = ({ items, selectedItem, onSelect, renderItem }) => (
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     {items.map((item) => (
       <motion.div
         key={item.id}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.98 }}
       >
         <Card
           className={`cursor-pointer transition-all ${
@@ -78,7 +81,7 @@ const SelectionGrid = ({ items, selectedItem, onSelect, renderItem }) => (
           }`}
           onClick={() => onSelect(item)}
         >
-          <CardContent className="p-6">{renderItem(item)}</CardContent>
+          <CardContent className="p-4 sm:p-6">{renderItem(item)}</CardContent>
         </Card>
       </motion.div>
     ))}
@@ -88,7 +91,7 @@ const SelectionGrid = ({ items, selectedItem, onSelect, renderItem }) => (
 const TimeSlotGroup = ({ title, slots, selectedTime, onSelectTime }) => (
   <div className="mb-4">
     <h4 className="text-lg font-semibold mb-2">{title}</h4>
-    <div className="grid grid-cols-4 gap-2">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
       {slots.map((time) => (
         <Button
           key={time}
@@ -424,7 +427,7 @@ function BookingSystem({ facilityId }) {
       }}
       renderItem={(staff) => (
         <div className="flex flex-col items-center h-full">
-          <Avatar className="w-20 h-20 mb-4">
+          <Avatar className="w-16 h-16 mb-4">
             {staff.id === "any" ? (
               <AvatarFallback>ANY</AvatarFallback>
             ) : (
@@ -459,16 +462,18 @@ function BookingSystem({ facilityId }) {
   );
 
   const renderDateSelection = () => (
-    <Calendar
-      mode="single"
-      selected={selectedDate}
-      onSelect={(date) => {
-        setSelectedDate(date);
-        setActiveStep(3);
-      }}
-      className="rounded-md border"
-      locale={sk}
-    />
+    <div className="flex justify-center">
+      <Calendar
+        mode="single"
+        selected={selectedDate}
+        onSelect={(date) => {
+          setSelectedDate(date);
+          setActiveStep(3);
+        }}
+        className="rounded-md border max-w-full"
+        locale={sk}
+      />
+    </div>
   );
 
   const renderTimeSelection = () => {
@@ -493,11 +498,17 @@ function BookingSystem({ facilityId }) {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
           </div>
         ) : availableSlots.length > 0 ? (
-          <Tabs defaultValue="morning">
-            <TabsList>
-              <TabsTrigger value="morning">Ráno</TabsTrigger>
-              <TabsTrigger value="afternoon">Poobede</TabsTrigger>
-              <TabsTrigger value="evening">Večer</TabsTrigger>
+          <Tabs defaultValue="morning" className="w-full">
+            <TabsList className="w-full flex">
+              <TabsTrigger value="morning" className="flex-1">
+                Ráno
+              </TabsTrigger>
+              <TabsTrigger value="afternoon" className="flex-1">
+                Poobede
+              </TabsTrigger>
+              <TabsTrigger value="evening" className="flex-1">
+                Večer
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="morning">
               <TimeSlotGroup
@@ -613,7 +624,7 @@ function BookingSystem({ facilityId }) {
         </div>
         <Button
           onClick={handleBooking}
-          className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white transition-colors text-lg py-6 rounded-lg shadow-lg"
+          className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white transition-colors text-lg py-4 sm:py-6 rounded-lg shadow-lg"
         >
           Potvrdiť rezerváciu
         </Button>
@@ -659,7 +670,7 @@ function BookingSystem({ facilityId }) {
             setActiveStep(0);
             setBookingComplete(false);
           }}
-          className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white transition-colors text-lg py-4 px-8 rounded-lg shadow-lg"
+          className="w-full sm:w-auto bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white transition-colors text-lg py-4 px-8 rounded-lg shadow-lg"
         >
           Rezervovať ďalší termín
         </Button>
@@ -674,7 +685,7 @@ function BookingSystem({ facilityId }) {
             };
             downloadICSFile(appointmentData);
           }}
-          className="bg-white text-pink-600 border border-pink-600 hover:bg-pink-50 transition-colors text-lg py-4 px-8 rounded-lg shadow-lg flex items-center"
+          className="w-full sm:w-auto bg-white text-pink-600 border border-pink-600 hover:bg-pink-50 transition-colors text-lg py-4 px-8 rounded-lg shadow-lg flex items-center justify-center"
         >
           <CalendarIcon2 className="mr-2" />
           Pridať do kalendára
@@ -701,7 +712,11 @@ function BookingSystem({ facilityId }) {
   };
 
   if (!facility) {
-    return <div>Načítavanie informácií o prevádzke...</div>;
+    return (
+      <div className="text-center py-8">
+        Načítavanie informácií o prevádzke...
+      </div>
+    );
   }
 
   return (
@@ -709,18 +724,21 @@ function BookingSystem({ facilityId }) {
       <Toaster position="top-center" reverseOrder={false} />
       <Card className="w-full max-w-4xl mx-auto bg-white shadow-2xl rounded-lg overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-          <CardTitle className="text-3xl font-bold flex items-center">
+          <CardTitle className="text-2xl sm:text-3xl font-bold flex items-center justify-center">
             <Sparkles className="mr-2" />
             {bookingComplete
               ? "Rezervácia dokončená"
               : `Rezervácia termínu v ${facility.name}`}
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-6 space-y-8">
+        <CardContent className="p-4 sm:p-6 space-y-6 sm:space-y-8">
           {!bookingComplete && (
             <>
               <Stepper currentStep={activeStep} />
-              <Progress value={(activeStep / (steps.length - 1)) * 100} />
+              <Progress
+                value={(activeStep / (steps.length - 1)) * 100}
+                className="w-full"
+              />
             </>
           )}
 
@@ -741,6 +759,7 @@ function BookingSystem({ facilityId }) {
               <Button
                 variant="outline"
                 onClick={() => setActiveStep((prev) => Math.max(0, prev - 1))}
+                className="px-4 py-2 text-sm sm:text-base"
               >
                 Späť
               </Button>
@@ -753,6 +772,7 @@ function BookingSystem({ facilityId }) {
                   (activeStep === 2 && !selectedDate) ||
                   (activeStep === 3 && !selectedTime)
                 }
+                className="px-4 py-2 text-sm sm:text-base"
               >
                 Ďalej
               </Button>
