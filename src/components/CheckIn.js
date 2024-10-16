@@ -29,11 +29,11 @@ import {
   PlusCircle,
   CheckCircle,
 } from "lucide-react";
+import { useFacility } from "../FacilityContext";
+import FacilitySelector from "./FacilitySelector";
 
 const CheckIn = () => {
   const [step, setStep] = useState("initial");
-  const [facilities, setFacilities] = useState([]);
-  const [selectedFacility, setSelectedFacility] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,15 +47,19 @@ const CheckIn = () => {
   const [services, setServices] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
 
+  const { selectedFacility, resetFacility } = useFacility();
+
   useEffect(() => {
-    fetchFacilities();
     fetchServices();
-    const storedFacility = localStorage.getItem("selectedFacility");
-    if (storedFacility) {
-      setSelectedFacility(JSON.parse(storedFacility));
-      setStep("initial");
-    }
   }, []);
+
+  useEffect(() => {
+    if (selectedFacility) {
+      setStep("initial");
+    } else {
+      setStep("facility");
+    }
+  }, [selectedFacility]);
 
   const fetchServices = async () => {
     try {
@@ -63,24 +67,9 @@ const CheckIn = () => {
       if (error) throw error;
       setServices(data);
     } catch (error) {
-      console.error("Error fetching services:", error);
-      toast.error("Failed to load services");
+      console.error("Chyba pri načítaní služieb:", error);
+      toast.error("Nepodarilo sa načítať služby");
     }
-  };
-
-  const fetchFacilities = async () => {
-    const { data, error } = await supabase.from("facilities").select("*");
-    if (error) {
-      console.error("Error fetching facilities:", error);
-    } else {
-      setFacilities(data);
-    }
-  };
-
-  const handleFacilitySelect = (facility) => {
-    setSelectedFacility(facility);
-    localStorage.setItem("selectedFacility", JSON.stringify(facility));
-    setStep("initial");
   };
 
   const handleSearch = async () => {
@@ -123,7 +112,7 @@ const CheckIn = () => {
         );
       }
     } catch (error) {
-      console.error("Error searching for appointment:", error);
+      console.error("Chyba pri vyhľadávaní rezervácie:", error);
       setError(
         "Chyba pri vyhľadávaní rezervácie. Skúste to prosím znova neskôr."
       );
@@ -163,7 +152,7 @@ const CheckIn = () => {
       toast.success("Check-in bol úspešný!");
       setStep("activeAppointment");
     } catch (error) {
-      console.error("Error during check-in:", error);
+      console.error("Chyba počas check-inu:", error);
       toast.error("Nepodarilo sa vykonať check-in. Skúste to prosím znova.");
     }
   };
@@ -206,12 +195,31 @@ const CheckIn = () => {
   const handleWalkInSubmit = async (e) => {
     e.preventDefault();
     setIsWalkInDialogOpen(false);
+
+    if (!selectedFacility) {
+      toast.error("Prosím, vyberte zariadenie pred potvrdením.");
+      return;
+    }
+
+    if (!selectedService) {
+      toast.error("Prosím, vyberte službu pred potvrdením.");
+      return;
+    }
+
     await handleWalkIn(walkInName, walkInContact);
   };
 
   const handleWalkIn = async (customerName, phoneOrEmail) => {
     setIsLoading(true);
     try {
+      if (!selectedFacility || !selectedFacility.id) {
+        throw new Error("Nie je vybrané žiadne zariadenie.");
+      }
+
+      if (!selectedService || !selectedService.id) {
+        throw new Error("Nie je vybraná žiadna služba.");
+      }
+
       // Find an available employee
       const { data: availableEmployee, error: employeeError } = await supabase
         .from("employee_queue")
@@ -237,7 +245,7 @@ const CheckIn = () => {
         throw employeeError;
       }
 
-      if (availableEmployee) {
+      if (availableEmployee && availableEmployee.employee_id) {
         const now = new Date();
         const appointmentEnd = new Date(
           now.getTime() + selectedService.duration * 60 * 1000
@@ -294,7 +302,7 @@ const CheckIn = () => {
         );
         setStep("activeAppointment");
       } else {
-        // Add customer to the queue (this part remains the same)
+        // Add customer to the queue
         const { data: queueData, error: queueError } = await supabase
           .from("customer_queue")
           .insert({
@@ -326,68 +334,14 @@ const CheckIn = () => {
         setStep("inQueue");
       }
     } catch (error) {
-      console.error("Error handling walk-in request:", error);
+      console.error("Chyba pri spracovaní walk-in požiadavky:", error);
       toast.error(
-        "Nepodarilo sa spracovať vašu žiadosť. Skúste to prosím znova."
+        `Nepodarilo sa spracovať vašu žiadosť: ${error.message}. Skúste to prosím znova.`
       );
     } finally {
       setIsLoading(false);
     }
   };
-
-  const renderFacilitySelection = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      {facilities.map((facility) => (
-        <motion.div
-          key={facility.id}
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          <Card
-            className="cursor-pointer hover:bg-pink-50 transition-colors shadow-lg"
-            onClick={() => handleFacilitySelect(facility)}
-          >
-            <CardContent className="p-6">
-              <h3 className="text-xl font-semibold mb-3 text-pink-700">
-                {facility.name}
-              </h3>
-              <div className="flex items-center text-gray-600">
-                <MapPin className="w-5 h-5 mr-2 text-pink-500" />
-                <span>{facility.address}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      ))}
-    </div>
-  );
-
-  const renderInQueue = () => (
-    <Card className="w-full max-w-xl mx-auto shadow-lg mt-8">
-      <CardHeader className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white">
-        <CardTitle className="text-2xl font-bold text-center">
-          V čakacom rade
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-6">
-        <div className="space-y-4">
-          <p className="text-center text-xl font-semibold">
-            Ste v čakacom rade
-          </p>
-          <div className="bg-yellow-50 rounded-lg p-4 text-center">
-            <p className="text-sm text-gray-500">Vaša pozícia v rade</p>
-            <p className="text-4xl font-bold text-yellow-600">
-              {queuePosition}
-            </p>
-          </div>
-          <p className="text-center text-gray-600">
-            Prosím, počkajte kým vás zavoláme. Odhadovaný čas čakania je
-            približne {queuePosition * 15} minút.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
 
   const renderInitialChoice = () => (
     <div className="flex flex-col sm:flex-row gap-6 max-w-4xl mx-auto">
@@ -544,11 +498,11 @@ const CheckIn = () => {
           </div>
           <div className="flex items-center space-x-3 text-gray-700">
             <User className="h-5 w-5 text-pink-500" />
-            <span>{`${searchResult.employees.users.first_name} ${searchResult.employees.users.last_name}`}</span>
+            <span>{searchResult.employee_name}</span>
           </div>
           <div className="flex items-center space-x-3 text-gray-700">
-            <AlertCircle className="h-5 w-5 text-pink-500" />
-            <span>{searchResult.services.name}</span>
+            <Scissors className="h-5 w-5 text-pink-500" />
+            <span>{searchResult.service_name}</span>
           </div>
         </div>
         <Button
@@ -708,21 +662,27 @@ const CheckIn = () => {
     </Dialog>
   );
 
-  const renderWalkInConfirmation = () => (
+  const renderInQueue = () => (
     <Card className="w-full max-w-xl mx-auto shadow-lg mt-8">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center text-green-700">
-          Žiadosť prijatá
+      <CardHeader className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white">
+        <CardTitle className="text-2xl font-bold text-center">
+          V čakacom rade
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-6">
         <div className="space-y-4">
           <p className="text-center text-xl font-semibold">
-            Váš požiadavok bol zaznamenaný
+            Ste v čakacom rade
           </p>
-          <p className="text-center">
-            Prosím, počkajte na ďalšie inštrukcie od personálu. Budeme sa vám
-            venovať čo najskôr.
+          <div className="bg-yellow-50 rounded-lg p-4 text-center">
+            <p className="text-sm text-gray-500">Vaša pozícia v rade</p>
+            <p className="text-4xl font-bold text-yellow-600">
+              {queuePosition}
+            </p>
+          </div>
+          <p className="text-center text-gray-600">
+            Prosím, počkajte kým vás zavoláme. Odhadovaný čas čakania je
+            približne {queuePosition * 15} minút.
           </p>
         </div>
       </CardContent>
@@ -732,7 +692,7 @@ const CheckIn = () => {
   const renderContent = () => {
     switch (step) {
       case "facility":
-        return renderFacilitySelection();
+        return <FacilitySelector />;
       case "initial":
         return renderInitialChoice();
       case "search":
@@ -745,8 +705,6 @@ const CheckIn = () => {
         return renderNoReservationChoice();
       case "selectService":
         return renderServiceSelection();
-      case "walkInConfirmation":
-        return renderWalkInConfirmation();
       case "inQueue":
         return renderInQueue();
       default:
@@ -768,14 +726,6 @@ const CheckIn = () => {
       {renderContent()}
 
       {renderWalkInDialog()}
-      {step !== "facility" && (
-        <Button
-          onClick={() => setStep("facility")}
-          className="mt-8 bg-gray-200 hover:bg-gray-300 text-gray-800"
-        >
-          Zmeniť pobočku
-        </Button>
-      )}
     </div>
   );
 };
