@@ -675,19 +675,25 @@ function BookingSystem({ facilityId }) {
           Rezervovať ďalší termín
         </Button>
         <Button
-          onClick={() => {
-            const appointmentData = {
-              service: selectedService,
-              facility: facility,
-              date: format(selectedDate, "yyyy-MM-dd"),
-              time: selectedTime,
-              staff: selectedStaff,
-            };
-            downloadICSFile(appointmentData);
+          onClick={(e) => {
+            e.preventDefault();
+            setTimeout(() => {
+              const appointmentData = {
+                service: selectedService,
+                facility: facility,
+                date: format(selectedDate, "yyyy-MM-dd"),
+                time: selectedTime,
+                staff:
+                  selectedStaff.id === "any"
+                    ? selectedRandomEmployee
+                    : selectedStaff,
+              };
+              downloadICSFile(appointmentData);
+            }, 100);
           }}
           className="w-full sm:w-auto bg-white text-pink-600 border border-pink-600 hover:bg-pink-50 transition-colors text-lg py-4 px-8 rounded-lg shadow-lg flex items-center justify-center"
         >
-          <CalendarIcon2 className="mr-2" />
+          <CalendarIcon className="mr-2" />
           Pridať do kalendára
         </Button>
       </div>

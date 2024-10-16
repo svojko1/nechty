@@ -1,68 +1,47 @@
-import { format, parseISO } from "date-fns";
+const formatDate = (date) => date.replace(/[-:]/g, "");
 
-export function generateICSContent(appointment) {
-  const { service, date, time, staff } = appointment;
-
-  // Log the incoming data for debugging
-  console.log("Appointment data:", appointment);
-
-  let startDate;
-  try {
-    // Ensure the date is in the correct format (YYYY-MM-DD)
-    const formattedDate = format(parseISO(date), "yyyy-MM-dd");
-    startDate = new Date(`${formattedDate}T${time}`);
-
-    // Check if startDate is valid
-    if (isNaN(startDate.getTime())) {
-      throw new Error("Invalid start date");
-    }
-  } catch (error) {
-    console.error("Error parsing date:", error);
-    throw new Error("Invalid date or time format");
-  }
-
-  const endDate = new Date(startDate.getTime() + service.duration * 60000);
-
-  const formatDate = (date) => {
-    try {
-      return format(date, "yyyyMMdd'T'HHmmss");
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      throw new Error("Error formatting date");
-    }
-  };
+const createICSContent = (appointmentData) => {
+  const { service, facility, date, time, staff } = appointmentData;
+  const startDate = `${date}T${time}:00`;
+  const endDate = new Date(
+    new Date(startDate).getTime() + service.duration * 60000
+  );
+  const endDateFormatted = `${date}T${endDate
+    .getHours()
+    .toString()
+    .padStart(2, "0")}:${endDate.getMinutes().toString().padStart(2, "0")}:00`;
 
   return `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Glam Nails//Appointment//EN
+PRODID:-//hacksw/handcal//NONSGML v1.0//EN
 BEGIN:VEVENT
-UID:${Date.now()}@glamnails.com
-DTSTAMP:${formatDate(new Date())}
+UID:${new Date().getTime()}@appointment.com
+DTSTAMP:${formatDate(new Date().toISOString())}
 DTSTART:${formatDate(startDate)}
-DTEND:${formatDate(endDate)}
-SUMMARY:${service.name} at Glam Nails
-DESCRIPTION:Appointment for ${service.name} with ${staff.users.first_name} ${
-    staff.users.last_name
-  }
-LOCATION:Glam Nails Salon
+DTEND:${formatDate(endDateFormatted)}
+SUMMARY:${service.name} at ${facility.name}
+DESCRIPTION:Appointment with ${staff.users.first_name} ${staff.users.last_name}
+LOCATION:${facility.address}
+STATUS:CONFIRMED
 END:VEVENT
 END:VCALENDAR`;
-}
+};
 
-export function downloadICSFile(appointment) {
-  try {
-    const icsContent = generateICSContent(appointment);
-    const blob = new Blob([icsContent], {
-      type: "text/calendar;charset=utf-8",
-    });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "glam_nails_appointment.ics";
-    document.body.appendChild(link);
+export const downloadICSFile = (appointmentData) => {
+  const icsContent = createICSContent(appointmentData);
+  const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", "appointment.ics");
+  document.body.appendChild(link);
+
+  if (navigator.userAgent.match(/(iPod|iPhone|iPad)/)) {
+    window.open(url);
+  } else {
     link.click();
-    document.body.removeChild(link);
-  } catch (error) {
-    console.error("Error generating ICS file:", error);
-    alert("There was an error creating the calendar event. Please try again.");
   }
-}
+
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
