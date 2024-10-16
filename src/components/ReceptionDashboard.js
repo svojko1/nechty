@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from "react";
-import {
-  format,
-  startOfDay,
-  endOfDay,
-  parseISO,
-  isToday,
-  isFuture,
-} from "date-fns";
+import { format, startOfDay, endOfDay } from "date-fns";
 import { sk } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import {
+  Select,
+  SelectItem,
+  SelectContent,
+  SelectValue,
+  SelectTrigger,
+} from "@radix-ui/react-select";
 import {
   Table,
   TableBody,
@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "./ui/table";
 import { Input } from "./ui/input";
+
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import {
@@ -36,18 +37,38 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import EmployeeQueueDisplay from "./EmployeeQueueDisplay";
+import { toast } from "react-hot-toast";
 
 const ReceptionDashboard = () => {
   const [appointments, setAppointments] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [endDate, setEndDate] = useState("");
+  const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [showOlder, setShowOlder] = useState(false);
+  const [selectedFacility, setSelectedFacility] = useState("all");
+  const [facilities, setFacilities] = useState([]);
+
+  useEffect(() => {
+    fetchFacilities();
+    fetchAppointments();
+  }, []);
 
   useEffect(() => {
     fetchAppointments();
-  }, [startDate, endDate, showOlder]);
+  }, [startDate, endDate, showOlder, selectedFacility]);
+
+  const fetchFacilities = async () => {
+    const { data, error } = await supabase
+      .from("facilities")
+      .select("id, name");
+    if (error) {
+      console.error("Error fetching facilities:", error);
+    } else {
+      setFacilities(data);
+    }
+  };
 
   const fetchAppointments = async () => {
     setIsLoading(true);
@@ -64,19 +85,20 @@ const ReceptionDashboard = () => {
         .order("start_time", { ascending: true });
 
       if (!showOlder) {
-        query = query.gte("start_time", startOfDay(new Date()).toISOString());
-      } else if (startDate) {
-        query = query.gte(
-          "start_time",
-          startOfDay(parseISO(startDate)).toISOString()
-        );
+        const today = new Date();
+        query = query.gte("start_time", startOfDay(today).toISOString());
+        query = query.lte("start_time", endOfDay(today).toISOString());
+      } else {
+        if (startDate) {
+          query = query.gte("start_time", `${startDate}T00:00:00`);
+        }
+        if (endDate) {
+          query = query.lte("start_time", `${endDate}T23:59:59`);
+        }
       }
 
-      if (endDate) {
-        query = query.lte(
-          "start_time",
-          endOfDay(parseISO(endDate)).toISOString()
-        );
+      if (selectedFacility !== "all") {
+        query = query.eq("facility_id", selectedFacility);
       }
 
       const { data, error } = await query;
@@ -85,8 +107,48 @@ const ReceptionDashboard = () => {
       setAppointments(data);
     } catch (error) {
       console.error("Error fetching appointments:", error);
+      toast.error("Failed to fetch appointments");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const getAppointmentStatus = (appointment) => {
+    if (appointment.status === "completed" && !appointment.is_paid)
+      return "ukoncene";
+    if (appointment.status === "completed" && appointment.is_paid)
+      return "zaplatene";
+    if (appointment.status === "in_progress") return "nezaplatene";
+    return "ukoncene";
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case "nezaplatene":
+        return <Badge className="bg-red-500 text-white">Nezaplatené</Badge>;
+      case "ukoncene":
+        return <Badge className="bg-yellow-500 text-white">Dokončené</Badge>;
+      case "zaplatene":
+        return <Badge className="bg-green-500 text-white">Zaplatené</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  const handleMarkAsPaid = async (appointmentId) => {
+    try {
+      const { error } = await supabase
+        .from("appointments")
+        .update({ is_paid: true })
+        .eq("id", appointmentId);
+
+      if (error) throw error;
+
+      fetchAppointments();
+      toast.success("Appointment marked as paid successfully");
+    } catch (error) {
+      console.error("Error marking appointment as paid:", error);
+      toast.error("Failed to mark appointment as paid");
     }
   };
 
@@ -106,39 +168,10 @@ const ReceptionDashboard = () => {
       appointment.employees?.table_number?.toString().includes(searchTerm)
   );
 
-  const getAppointmentStatus = (appointment) => {
-    const appointmentDate = new Date(appointment.start_time);
-    if (appointment.status === "completed") return "completed";
-    if (isToday(appointmentDate)) return "today";
-    if (isFuture(appointmentDate)) return "upcoming";
-    return "past";
-  };
-
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case "completed":
-        return <Badge variant="success">Dokončené</Badge>;
-      case "today":
-        return (
-          <Badge variant="warning" className="bg-yellow-500">
-            Dnes
-          </Badge>
-        );
-      case "upcoming":
-        return (
-          <Badge variant="default" className="bg-blue-500">
-            Naplánované
-          </Badge>
-        );
-      case "past":
-        return <Badge variant="destructive">Zmeškané</Badge>;
-      default:
-        return null;
-    }
-  };
-
   return (
     <Card className="w-full">
+      <EmployeeQueueDisplay className="mb-10" />
+
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-pink-700 flex items-center">
           <CalendarClock className="mr-2" />
@@ -182,6 +215,19 @@ const ReceptionDashboard = () => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Select value={selectedFacility} onValueChange={setSelectedFacility}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Vyberte zariadenie" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Všetky zariadenia</SelectItem>
+              {facilities.map((facility) => (
+                <SelectItem key={facility.id} value={facility.id}>
+                  {facility.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             onClick={fetchAppointments}
             className="bg-pink-500 hover:bg-pink-600"
@@ -203,16 +249,14 @@ const ReceptionDashboard = () => {
                   <TableHead>Služba</TableHead>
                   <TableHead>Dátum a čas</TableHead>
                   <TableHead>Cena</TableHead>
+                  <TableHead>Akcia</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAppointments.map((appointment, index) => {
+                {filteredAppointments.map((appointment) => {
                   const status = getAppointmentStatus(appointment);
                   return (
-                    <TableRow
-                      key={appointment.id}
-                      className={index % 2 === 0 ? "bg-gray-50" : "bg-white"}
-                    >
+                    <TableRow key={appointment.id}>
                       <TableCell>{getStatusBadge(status)}</TableCell>
                       <TableCell>
                         <div className="flex items-center">
@@ -253,6 +297,17 @@ const ReceptionDashboard = () => {
                           <Clipboard className="mr-2 h-4 w-4 text-gray-500" />
                           {appointment.price ? `${appointment.price} €` : "-"}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {status === "ukoncene" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleMarkAsPaid(appointment.id)}
+                          >
+                            Označiť ako zaplatené
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

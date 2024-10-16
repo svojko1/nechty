@@ -426,318 +426,334 @@ const ManagerDashboard = () => {
   );
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">
-            Dashboard manažéra
-          </h1>
-          <div className="flex items-center space-x-4">
-            <Select
-              value={selectedTimeRange}
-              onValueChange={setSelectedTimeRange}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Vyberte časové obdobie" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="week">Týždeň</SelectItem>
-                <SelectItem value="month">Mesiac</SelectItem>
-                <SelectItem value="quarter">Štvrťrok</SelectItem>
-                <SelectItem value="year">Rok</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={selectedFacility}
-              onValueChange={setSelectedFacility}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Vyberte zariadenie" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Všetky zariadenia</SelectItem>
-                {facilities.map((facility) => (
-                  <SelectItem key={facility.id} value={facility.id}>
-                    {facility.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Dialog
-              open={isEmployeeRegistrationOpen}
-              onOpenChange={setIsEmployeeRegistrationOpen}
-            >
-              <DialogTrigger asChild>
-                <Button className="bg-pink-500 hover:bg-pink-600 text-white">
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Add Employee
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Add New Employee</DialogTitle>
-                  <DialogDescription>
-                    Create a new account for an employee here.
-                  </DialogDescription>
-                </DialogHeader>
-                <EmployeeRegistration />
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          <StatCard
-            icon={DollarSign}
-            title="Celkové tržby"
-            value={`${dashboardData.totalRevenue.toFixed(2)} €`}
-            change="5.2"
-            changeType="increase"
-          />
-          <StatCard
-            icon={Users}
-            title="Celkové rezervácie"
-            value={dashboardData.totalBookings}
-            change="3.1"
-            changeType="increase"
-          />
-          <StatCard
-            icon={TrendingUp}
-            title="Priemerná cena"
-            value={`${dashboardData.averagePrice.toFixed(2)} €`}
-            change="1.5"
-            changeType="increase"
-          />
-          <StatCard
-            icon={Award}
-            title="Spokojnosť zákazníkov"
-            value={`${dashboardData.customerSatisfaction}%`}
-            change="0.8"
-            changeType="decrease"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <Card className="bg-white shadow-xl rounded-lg overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-              <CardTitle className="text-2xl font-bold">
-                Mesačné tržby
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={dashboardData.revenueData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="revenue" fill="#8884d8" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white shadow-xl rounded-lg overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-              <CardTitle className="text-2xl font-bold">
-                Popularita služieb
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={dashboardData.servicePopularity}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                    label={({ name, percent }) =>
-                      `${name} ${(percent * 100).toFixed(0)}%`
-                    }
-                  >
-                    {dashboardData.servicePopularity.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
+    <Card className="w-full  mx-auto w-full bg-white shadow-2xl rounded-lg overflow-hidden">
+      <CardContent className="p-6 space-y-8">
+        <div className="p-6  min-h-screen">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-3xl font-bold text-gray-800">
+                Dashboard manažéra
+              </h1>
+              <div className="flex items-center space-x-4">
+                <Select
+                  value={selectedTimeRange}
+                  onValueChange={setSelectedTimeRange}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Vyberte časové obdobie" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="week">Týždeň</SelectItem>
+                    <SelectItem value="month">Mesiac</SelectItem>
+                    <SelectItem value="quarter">Štvrťrok</SelectItem>
+                    <SelectItem value="year">Rok</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={selectedFacility}
+                  onValueChange={setSelectedFacility}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Vyberte zariadenie" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Všetky zariadenia</SelectItem>
+                    {facilities.map((facility) => (
+                      <SelectItem key={facility.id} value={facility.id}>
+                        {facility.name}
+                      </SelectItem>
                     ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="bg-white shadow-xl rounded-lg overflow-hidden mb-6">
-          <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-            <CardTitle className="text-2xl font-bold">
-              Výkonnosť zamestnancov
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Zamestnanec</TableHead>
-                  <TableHead>Rezervácie</TableHead>
-                  <TableHead>Tržby</TableHead>
-                  <TableHead>Najčastejšia služba</TableHead>
-                  <TableHead>Výkon</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dashboardData.employeePerformance.map((employee, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center">
-                        <Avatar className="h-10 w-10 mr-3">
-                          <AvatarImage
-                            src={employee.avatar}
-                            alt={employee.name}
-                          />
-                          <AvatarFallback>
-                            {employee.name.charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
-                        {employee.name}
-                      </div>
-                    </TableCell>
-                    <TableCell>{employee.bookings}</TableCell>
-                    <TableCell>{employee.revenue.toFixed(2)} €</TableCell>
-                    <TableCell>{employee.topService}</TableCell>
-                    <TableCell>
-                      <Progress
-                        value={
-                          (employee.bookings /
-                            Math.max(
-                              ...dashboardData.employeePerformance.map(
-                                (e) => e.bookings
-                              )
-                            )) *
-                          100
-                        }
-                        className="h-2 w-full"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white shadow-xl rounded-lg overflow-hidden mb-6">
-          <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-            <CardTitle className="text-2xl font-bold">
-              Appointments and Customers
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <Tabs defaultValue="appointments">
-              <TabsList className="mb-4">
-                <TabsTrigger value="appointments">Appointments</TabsTrigger>
-              </TabsList>
-              <div className="mb-4 flex items-center">
-                <Search className="w-5 h-5 text-gray-400 mr-2" />
-                <Input
-                  placeholder="Search appointments..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="flex-grow"
-                />
+                  </SelectContent>
+                </Select>
+                <Dialog
+                  open={isEmployeeRegistrationOpen}
+                  onOpenChange={setIsEmployeeRegistrationOpen}
+                >
+                  <DialogTrigger asChild>
+                    <Button className="bg-pink-500 hover:bg-pink-600 text-white">
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Add Employee
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Add New Employee</DialogTitle>
+                      <DialogDescription>
+                        Create a new account for an employee here.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <EmployeeRegistration />
+                  </DialogContent>
+                </Dialog>
               </div>
-              <TabsContent value="appointments">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Email/Phone</TableHead>
-                        <TableHead>Total Appointments</TableHead>
-                        <TableHead>Total Spent</TableHead>
-                        <TableHead>Last Appointment</TableHead>
-                        <TableHead>Last Service</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {Object.values(groupedAppointments).map((customer) => (
-                        <TableRow key={customer.email || customer.phone}>
-                          <TableCell>
-                            <div>{customer.email || "N/A"}</div>
-                            <div className="text-sm text-gray-500">
-                              {customer.phone || "N/A"}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+              <StatCard
+                icon={DollarSign}
+                title="Celkové tržby"
+                value={`${dashboardData.totalRevenue.toFixed(2)} €`}
+                change="5.2"
+                changeType="increase"
+              />
+              <StatCard
+                icon={Users}
+                title="Celkové rezervácie"
+                value={dashboardData.totalBookings}
+                change="3.1"
+                changeType="increase"
+              />
+              <StatCard
+                icon={TrendingUp}
+                title="Priemerná cena"
+                value={`${dashboardData.averagePrice.toFixed(2)} €`}
+                change="1.5"
+                changeType="increase"
+              />
+              <StatCard
+                icon={Award}
+                title="Spokojnosť zákazníkov"
+                value={`${dashboardData.customerSatisfaction}%`}
+                change="0.8"
+                changeType="decrease"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <Card className="bg-white shadow-xl rounded-lg overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+                  <CardTitle className="text-2xl font-bold">
+                    Mesačné tržby
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={dashboardData.revenueData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="revenue" fill="#8884d8" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white shadow-xl rounded-lg overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+                  <CardTitle className="text-2xl font-bold">
+                    Popularita služieb
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={dashboardData.servicePopularity}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                        label={({ name, percent }) =>
+                          `${name} ${(percent * 100).toFixed(0)}%`
+                        }
+                      >
+                        {dashboardData.servicePopularity.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={COLORS[index % COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="bg-white shadow-xl rounded-lg overflow-hidden mb-6">
+              <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+                <CardTitle className="text-2xl font-bold">
+                  Výkonnosť zamestnancov
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Zamestnanec</TableHead>
+                      <TableHead>Rezervácie</TableHead>
+                      <TableHead>Tržby</TableHead>
+                      <TableHead>Najčastejšia služba</TableHead>
+                      <TableHead>Výkon</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dashboardData.employeePerformance.map(
+                      (employee, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center">
+                              <Avatar className="h-10 w-10 mr-3">
+                                <AvatarImage
+                                  src={employee.avatar}
+                                  alt={employee.name}
+                                />
+                                <AvatarFallback>
+                                  {employee.name.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              {employee.name}
                             </div>
                           </TableCell>
-                          <TableCell>{customer.totalAppointments}</TableCell>
+                          <TableCell>{employee.bookings}</TableCell>
+                          <TableCell>{employee.revenue.toFixed(2)} €</TableCell>
+                          <TableCell>{employee.topService}</TableCell>
                           <TableCell>
-                            {customer.totalSpent.toFixed(2)} €
-                          </TableCell>
-                          <TableCell>
-                            {format(
-                              new Date(customer.appointments[0].start_time),
-                              "dd.MM.yyyy HH:mm"
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {customer.appointments[0].services.name}
+                            <Progress
+                              value={
+                                (employee.bookings /
+                                  Math.max(
+                                    ...dashboardData.employeePerformance.map(
+                                      (e) => e.bookings
+                                    )
+                                  )) *
+                                100
+                              }
+                              className="h-2 w-full"
+                            />
                           </TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+                      )
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
 
-        <Card className="bg-white shadow-xl rounded-lg overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-            <CardTitle className="text-2xl font-bold">
-              Nadchádzajúce termíny
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              {dashboardData.upcomingAppointments.map((appointment, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between border-b pb-4"
-                >
-                  <div className="flex items-center">
-                    <Calendar className="h-10 w-10 text-pink-500 mr-3" />
-                    <div>
-                      <p className="font-medium">{appointment.services.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {`${appointment.employees.users.first_name} ${appointment.employees.users.last_name}`}
-                      </p>
+            <Card className="bg-white shadow-xl rounded-lg overflow-hidden mb-6">
+              <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+                <CardTitle className="text-2xl font-bold">
+                  Appointments and Customers
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <Tabs defaultValue="appointments">
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="appointments">Appointments</TabsTrigger>
+                  </TabsList>
+                  <div className="mb-4 flex items-center">
+                    <Search className="w-5 h-5 text-gray-400 mr-2" />
+                    <Input
+                      placeholder="Search appointments..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="flex-grow"
+                    />
+                  </div>
+                  <TabsContent value="appointments">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Email/Phone</TableHead>
+                            <TableHead>Total Appointments</TableHead>
+                            <TableHead>Total Spent</TableHead>
+                            <TableHead>Last Appointment</TableHead>
+                            <TableHead>Last Service</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {Object.values(groupedAppointments).map(
+                            (customer) => (
+                              <TableRow key={customer.email || customer.phone}>
+                                <TableCell>
+                                  <div>{customer.email || "N/A"}</div>
+                                  <div className="text-sm text-gray-500">
+                                    {customer.phone || "N/A"}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  {customer.totalAppointments}
+                                </TableCell>
+                                <TableCell>
+                                  {customer.totalSpent.toFixed(2)} €
+                                </TableCell>
+                                <TableCell>
+                                  {format(
+                                    new Date(
+                                      customer.appointments[0].start_time
+                                    ),
+                                    "dd.MM.yyyy HH:mm"
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {customer.appointments[0].services.name}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          )}
+                        </TableBody>
+                      </Table>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium">
-                      {format(
-                        new Date(appointment.start_time),
-                        "dd. MMMM yyyy"
-                      )}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {format(new Date(appointment.start_time), "HH:mm")}
-                    </p>
-                  </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white shadow-xl rounded-lg overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+                <CardTitle className="text-2xl font-bold">
+                  Nadchádzajúce termíny
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  {dashboardData.upcomingAppointments.map(
+                    (appointment, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between border-b pb-4"
+                      >
+                        <div className="flex items-center">
+                          <Calendar className="h-10 w-10 text-pink-500 mr-3" />
+                          <div>
+                            <p className="font-medium">
+                              {appointment.services.name}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {`${appointment.employees.users.first_name} ${appointment.employees.users.last_name}`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">
+                            {format(
+                              new Date(appointment.start_time),
+                              "dd. MMMM yyyy"
+                            )}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {format(new Date(appointment.start_time), "HH:mm")}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  )}
                 </div>
-              ))}
-            </div>
-            <div className="mt-6 text-center">
-              <Button variant="outline">Zobraziť všetky termíny</Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+                <div className="mt-6 text-center">
+                  <Button variant="outline">Zobraziť všetky termíny</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

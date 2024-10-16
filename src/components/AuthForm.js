@@ -15,6 +15,7 @@ import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "./ui/alert";
 import { supabase } from "../supabaseClient";
 import { toast } from "react-hot-toast";
+import EmployeeRegistration from "./EmployeeRegistration";
 
 const AuthForm = ({ setSession }) => {
   const [email, setEmail] = useState("");
@@ -24,6 +25,7 @@ const AuthForm = ({ setSession }) => {
   const [phone, setPhone] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isEmployeeRegistered, setIsEmployeeRegistered] = useState(false);
 
   const handleSignUp = async (e) => {
     e.preventDefault();
@@ -55,7 +57,6 @@ const AuthForm = ({ setSession }) => {
           last_name: lastName,
           phone: phone,
           password_hash: "passwordHash",
-
           role: "customer",
         },
       ]);
@@ -108,6 +109,10 @@ const AuthForm = ({ setSession }) => {
     }
   };
 
+  const handleEmployeeRegistration = () => {
+    setIsEmployeeRegistered(true);
+  };
+
   return (
     <Card className="w-[350px] bg-white shadow-xl">
       <CardHeader className="space-y-1">
@@ -120,9 +125,10 @@ const AuthForm = ({ setSession }) => {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="signin" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="signin">Prihlásiť</TabsTrigger>
             <TabsTrigger value="signup">Registrovať</TabsTrigger>
+            <TabsTrigger value="employee">Zamestnanec</TabsTrigger>
           </TabsList>
           <TabsContent value="signin">
             <form onSubmit={handleSignIn}>
@@ -221,6 +227,21 @@ const AuthForm = ({ setSession }) => {
                 {loading ? "Registrácia..." : "Registrovať"}
               </Button>
             </form>
+          </TabsContent>
+          <TabsContent value="employee">
+            {isEmployeeRegistered ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Vaša žiadosť o registráciu bola prijatá. Administrátor ju musí
+                  schváliť pred tým, ako sa budete môcť prihlásiť.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <EmployeeRegistration
+                onRegistrationComplete={handleEmployeeRegistration}
+              />
+            )}
           </TabsContent>
         </Tabs>
       </CardContent>

@@ -50,10 +50,12 @@ import {
 import { supabase } from "../supabaseClient";
 import { toast } from "react-hot-toast";
 import AppointmentTimer from "./AppointmentTimer";
+import EnhancedAppointmentTimer from "./EnhancedAppointmentTimer";
 
 function EmployeeDashboard({ session }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
   const [appointments, setAppointments] = useState([]);
   const [employeeStats, setEmployeeStats] = useState({
     monthlyEarnings: 0,
@@ -64,15 +66,21 @@ function EmployeeDashboard({ session }) {
   const [isLoading, setIsLoading] = useState(true);
   const [currentAppointment, setCurrentAppointment] = useState(null);
   const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
+
   const [isConfirmationDialogOpen, setIsConfirmationDialogOpen] =
     useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [price, setPrice] = useState("");
+  const [isCheckedIn, setIsCheckedIn] = useState(false);
+  const [queueId, setQueueId] = useState(null);
+  const [employeeData, setEmployeeData] = useState(null);
 
   useEffect(() => {
     if (session && session.user) {
       console.log("Session detected, fetching data...");
-      fetchEmployeeData();
+      if (session && session.user) {
+        fetchEmployeeData();
+      }
       fetchAppointments();
     } else {
       console.log("No session, skipping data fetch");
@@ -80,106 +88,185 @@ function EmployeeDashboard({ session }) {
   }, [session]);
 
   useEffect(() => {
-    if (appointments.length > 0) {
-      updateCurrentAppointment();
+    if (session && session.user) {
+      fetchEmployeeData();
     }
-  }, [appointments]);
+  }, [session]);
 
-  const updateCurrentAppointment = () => {
-    const now = new Date();
-    const current = appointments.find((appointment) => {
-      const start = new Date(appointment.start_time);
-      const end = new Date(appointment.end_time);
-      return isAfter(now, start) && isBefore(now, end);
-    });
+  useEffect(() => {
+    if (employeeData) {
+      checkEmployeeQueueStatus();
+    }
+  }, [employeeData]);
 
-    if (current) {
-      setCurrentAppointment(current);
-    } else {
-      const upcoming = appointments.find((appointment) =>
-        isAfter(new Date(appointment.start_time), now)
-      );
-      setCurrentAppointment(upcoming);
+  const checkEmployeeQueueStatus = async () => {
+    if (employeeData) {
+      try {
+        const { data, error } = await supabase
+          .from("employee_queue")
+          .select("id, is_active, check_in_time")
+          .eq("employee_id", employeeData.id)
+          .eq("is_active", true)
+          .order("check_in_time", { ascending: false });
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          // Use the most recent active entry
+          setIsCheckedIn(true);
+          setQueueId(data[0].id);
+        } else {
+          setIsCheckedIn(false);
+          setQueueId(null);
+        }
+      } catch (error) {
+        console.error("Error checking employee queue status:", error);
+        toast.error("Failed to check employee status. Please try again.");
+      }
     }
   };
 
-  const fetchEmployeeData = async () => {
+  useEffect(() => {
+    if (appointments.length > 0) {
+      updateCurrentAppointment(appointments);
+    }
+  }, [appointments]);
+
+  const handleCheckIn = async () => {
+    if (!employeeData) {
+      toast.error("Employee data not available. Please try again.");
+      return;
+    }
+
     try {
-      const { data: employeeData, error: employeeError } = await supabase
+      // First, check if there's an active entry
+      const { data: existingEntries, error: fetchError } = await supabase
+        .from("employee_queue")
+        .select("id")
+        .eq("employee_id", employeeData.id)
+        .eq("is_active", true);
+
+      if (fetchError) throw fetchError;
+
+      if (existingEntries && existingEntries.length > 0) {
+        // If there are active entries, update the most recent one
+        const { error: updateError } = await supabase
+          .from("employee_queue")
+          .update({
+            check_in_time: new Date().toISOString(),
+            is_active: true,
+          })
+          .eq("id", existingEntries[0].id);
+
+        if (updateError) throw updateError;
+
+        setIsCheckedIn(true);
+        setQueueId(existingEntries[0].id);
+      } else {
+        // If no active entries, create a new one
+        const { data, error: insertError } = await supabase
+          .from("employee_queue")
+          .insert({
+            employee_id: employeeData.id,
+            facility_id: employeeData.facility_id,
+            check_in_time: new Date().toISOString(),
+            is_active: true,
+            position_in_queue: 0, // This should be calculated based on the current queue
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+
+        setIsCheckedIn(true);
+        setQueueId(data.id);
+      }
+
+      toast.success("Successfully checked in!");
+    } catch (error) {
+      console.error("Error checking in:", error);
+      toast.error("Failed to check in. Please try again.");
+    }
+  };
+
+  const handleCheckOut = async () => {
+    try {
+      const { error } = await supabase
+        .from("employee_queue")
+        .update({
+          check_out_time: new Date().toISOString(),
+          is_active: false,
+        })
+        .eq("id", queueId);
+
+      if (error) throw error;
+
+      setIsCheckedIn(false);
+      setQueueId(null);
+      toast.success("Successfully checked out!");
+    } catch (error) {
+      console.error("Error checking out:", error);
+      toast.error("Failed to check out. Please try again.");
+    }
+  };
+
+  const updateCurrentAppointment = (appointmentsData = []) => {
+    const now = new Date();
+    const current = appointmentsData.find((appointment) => {
+      const start = new Date(appointment.start_time);
+      const end = new Date(appointment.end_time);
+      return now >= start && now < end;
+    });
+
+    setCurrentAppointment(current || null);
+  };
+
+  const fetchEmployeeData = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
         .from("employees")
-        .select("*")
-        .eq("user_id", session.user.id)
+        .select("*, users!inner(*)")
+        .eq("users.id", session.user.id)
         .single();
 
-      if (employeeError) throw employeeError;
+      if (error) throw error;
 
-      const startDate = startOfMonth(currentMonth);
-      const endDate = endOfMonth(currentMonth);
-
-      const { data: appointmentsData, error: appointmentsError } =
-        await supabase
-          .from("appointments")
-          .select("*")
-          .eq("employee_id", employeeData.id)
-          .gte("start_time", startDate.toISOString())
-          .lte("start_time", endDate.toISOString());
-
-      if (appointmentsError) throw appointmentsError;
-
-      const monthlyEarnings = appointmentsData.reduce(
-        (sum, appointment) => sum + (appointment.price || 0),
-        0
-      );
-      const totalAppointments = appointmentsData.length;
-
-      const { data: reviewsData, error: reviewsError } = await supabase
-        .from("reviews")
-        .select("rating")
-        .eq("employee_id", employeeData.id);
-
-      if (reviewsError) throw reviewsError;
-
-      const averageRating =
-        reviewsData.reduce((sum, review) => sum + review.rating, 0) /
-          reviewsData.length || 0;
-
-      setEmployeeStats({
-        monthlyEarnings,
-        totalAppointments,
-        rating: averageRating.toFixed(1),
-        monthlyGoal: 60,
-      });
+      setEmployeeData(data);
     } catch (error) {
       console.error("Error fetching employee data:", error);
+      toast.error("Failed to fetch employee data. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const fetchAppointments = async () => {
     setIsLoading(true);
     try {
-      console.log("Fetching employee data...");
       const { data: employeeData, error: employeeError } = await supabase
         .from("employees")
         .select("id")
         .eq("user_id", session.user.id)
         .single();
 
-      if (employeeError) {
-        console.error("Error fetching employee data:", employeeError);
-        throw employeeError;
-      }
-
-      if (!employeeData) {
-        console.error("No employee data found");
-        throw new Error("No employee data found");
-      }
-
-      console.log("Employee data:", employeeData);
+      if (employeeError) throw employeeError;
 
       const now = new Date();
-      const twoMonthsLater = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+      const todayStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      );
+      const todayEnd = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        23,
+        59,
+        59
+      );
 
-      console.log("Fetching appointments...");
       const { data, error } = await supabase
         .from("appointments")
         .select(
@@ -189,22 +276,30 @@ function EmployeeDashboard({ session }) {
         `
         )
         .eq("employee_id", employeeData.id)
-        .gte("start_time", now.toISOString())
-        .lte("start_time", twoMonthsLater.toISOString())
+        .gte("start_time", todayStart.toISOString())
+        .lte("start_time", todayEnd.toISOString())
         .order("start_time", { ascending: true });
 
-      if (error) {
-        console.error("Error fetching appointments:", error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log("Appointments fetched:", data);
+      //       const testAppointment = {
+      //   id: 'test-appointment',
+      //   start_time: new Date(now.getTime() - 5 * 60000).toISOString(), // 5 minutes ago
+      //   end_time: new Date(now.getTime() + 55 * 60000).toISOString(), // 55 minutes from now
+      //   services: { name: 'Test Service' },
+      //   customer_name: 'Test Customer',
+      //   email: 'test@example.com',
+      //   phone: '1234567890'
+      // };
+
+      // setAppointments([testAppointment, ...data]);
+      // updateCurrentAppointment([testAppointment, ...data]);
       setAppointments(data);
+      updateCurrentAppointment(data); // Pass the fetched data here
     } catch (error) {
-      console.error("Error in fetchAppointments:", error);
+      console.error("Error fetching appointments:", error);
       toast.error(`Failed to fetch appointments: ${error.message}`);
     } finally {
-      console.log("Setting isLoading to false");
       setIsLoading(false);
     }
   };
@@ -288,340 +383,415 @@ function EmployeeDashboard({ session }) {
   );
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">
-        Dashboard zamestnanca
-      </h1>
+    <Card className="w-full  mx-auto bg-white shadow-2xl rounded-lg overflow-hidden">
+      <CardContent className="p-6 space-y-8">
+        <div className="p-6 min-h-screen">
+          <h1 className="text-3xl font-bold text-gray-800 mb-6">
+            Dashboard zamestnanca
+          </h1>
 
-      {currentAppointment && (
-        <Card className="mb-6 bg-white shadow-xl rounded-lg overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-            <CardTitle className="text-2xl font-bold flex items-center">
-              <Clock className="mr-2" />
-              Aktuálna rezervácia
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <AppointmentTimer appointment={currentAppointment} />
-            <div className="mt-4">
-              <p className="font-semibold">
-                Klient: {getClientDisplay(currentAppointment)}
-              </p>
-              <p>Služba: {currentAppointment.services.name}</p>
-            </div>
-            <Button
-              onClick={() => handleFinishAppointment(currentAppointment)}
-              className="mt-4 bg-green-500 hover:bg-green-600 text-white"
-            >
-              Ukončiť rezerváciu
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+          <Card className="mt-6 bg-white shadow-xl rounded-lg overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+              <CardTitle className="text-2xl font-bold flex items-center">
+                Employee Queue Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              {isCheckedIn ? (
+                <Button
+                  onClick={handleCheckOut}
+                  className="bg-red-500 hover:bg-red-600 text-white"
+                >
+                  Check Out
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleCheckIn}
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                >
+                  Check In
+                </Button>
+              )}
+            </CardContent>
+          </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-        <StatCard
-          icon={DollarSign}
-          title="Mesačný zárobok"
-          value={`${employeeStats.monthlyEarnings.toFixed(2)} €`}
-          change="5.2"
-          changeType="increase"
-        />
-        <StatCard
-          icon={Star}
-          title="Hodnotenie"
-          value={employeeStats.rating}
-          change="0.3"
-          changeType="increase"
-        />
-        <StatCard
-          icon={Users}
-          title="Počet rezervácií"
-          value={employeeStats.totalAppointments}
-          change="3.1"
-          changeType="increase"
-        />
-        <StatCard
-          icon={Briefcase}
-          title="Mesačný cieľ"
-          value={`${(
-            (employeeStats.totalAppointments / employeeStats.monthlyGoal) *
-            100
-          ).toFixed(0)}%`}
-          change="2.5"
-          changeType="increase"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 bg-white shadow-xl rounded-lg overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-            <CardTitle className="text-2xl font-bold flex items-center">
-              <CalendarIcon className="mr-2" />
-              Váš pracovný kalendár
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="flex flex-col lg:flex-row space-y-6 lg:space-y-0 lg:space-x-6">
-              <div className="flex-shrink-0">
-                <div className="flex items-center justify-between mb-4">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="font-medium text-lg">
-                    {format(currentMonth, "MMMM yyyy", { locale: sk })}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  className="rounded-md border shadow"
-                  modifiers={{
-                    booked: (date) =>
-                      appointmentDays.has(format(date, "yyyy-MM-dd")),
-                  }}
-                  modifiersStyles={{
-                    booked: { backgroundColor: "#ec4899", color: "white" },
-                  }}
-                  month={currentMonth}
-                  onMonthChange={setCurrentMonth}
-                />
-              </div>
-              <div className="flex-grow">
-                <h3 className="text-xl font-semibold mb-4">
-                  Rozvrh na{" "}
-                  {format(selectedDate, "d. MMMM yyyy", { locale: sk })}
-                </h3>
-                {filteredAppointments.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Čas</TableHead>
-                        <TableHead>Klient</TableHead>
-                        <TableHead>Služba</TableHead>
-                        <TableHead>Akcia</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredAppointments.map((appointment) => (
-                        <TableRow key={appointment.id}>
-                          <TableCell className="font-medium">
-                            {format(parseISO(appointment.start_time), "HH:mm")}
-                          </TableCell>
-                          <TableCell>{getClientDisplay(appointment)}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">
-                              {appointment.services.name}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              onClick={() =>
-                                handleFinishAppointment(appointment)
-                              }
-                              className="bg-green-500 hover:bg-green-600 text-white"
-                              disabled={appointment.status === "completed"}
-                            >
-                              {appointment.status === "completed"
-                                ? "Completed"
-                                : "Finish"}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <p className="text-gray-500 italic">
-                    Žiadne rezervácie na tento deň.
+          {currentAppointment && (
+            <Card className="mb-6 bg-white shadow-xl rounded-lg overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+                <CardTitle className="text-2xl font-bold flex items-center">
+                  <Clock className="mr-2" />
+                  Aktuálna rezervácia
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <EnhancedAppointmentTimer appointment={currentAppointment} />
+                <div className="mt-4">
+                  <p className="font-semibold">
+                    Klient: {getClientDisplay(currentAppointment)}
                   </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white shadow-xl rounded-lg overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-            <CardTitle className="text-2xl font-bold flex items-center">
-              <Briefcase className="mr-2" />
-              Mesačný prehľad
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="flex flex-col space-y-4">
-              <div className="text-center">
-                <p className="text-3xl font-bold text-purple-600">
-                  {employeeStats.totalAppointments}
-                </p>
-                <p className="text-gray-600">Celkový počet rezervácií</p>
-              </div>
-              <div className="w-full">
-                <Progress
-                  value={
-                    (employeeStats.totalAppointments /
-                      employeeStats.monthlyGoal) *
-                    100
-                  }
-                  className="h-4"
-                />
-                <p className="text-center text-sm text-gray-600 mt-2">
-                  {employeeStats.monthlyGoal} rezervácií tento mesiac
-                </p>
-              </div>
-              <div className="mt-4">
-                <h4 className="text-lg font-semibold mb-2">Top služby</h4>
-                <ul className="space-y-2">
-                  {Object.entries(
-                    appointments.reduce((acc, appointment) => {
-                      const serviceName = appointment.services.name;
-                      acc[serviceName] = (acc[serviceName] || 0) + 1;
-                      return acc;
-                    }, {})
-                  )
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 3)
-                    .map(([service, count]) => (
-                      <li
-                        key={service}
-                        className="flex justify-between items-center"
-                      >
-                        <span>{service}</span>
-                        <Badge>{count}</Badge>
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="mt-6 bg-white shadow-xl rounded-lg overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-          <CardTitle className="text-2xl font-bold flex items-center">
-            <Clock className="mr-2" />
-            Nadchádzajúce rezervácie
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          {isLoading ? (
-            <p className="text-center text-gray-500">Načítavam rezervácie...</p>
-          ) : appointments.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Dátum</TableHead>
-                  <TableHead>Čas</TableHead>
-                  <TableHead>Klient</TableHead>
-                  <TableHead>Služba</TableHead>
-                  <TableHead>Stav</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {appointments.slice(0, 5).map((appointment) => (
-                  <TableRow key={appointment.id}>
-                    <TableCell>
-                      {format(parseISO(appointment.start_time), "dd.MM.yyyy")}
-                    </TableCell>
-                    <TableCell>
-                      {format(parseISO(appointment.start_time), "HH:mm")}
-                    </TableCell>
-                    <TableCell>{getClientDisplay(appointment)}</TableCell>
-                    <TableCell>{appointment.services.name}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          appointment.status === "completed"
-                            ? "success"
-                            : "default"
-                        }
-                      >
-                        {appointment.status === "completed"
-                          ? "Completed"
-                          : "Scheduled"}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <p className="text-center text-gray-500">
-              Žiadne nadchádzajúce rezervácie.
-            </p>
+                  <p>Služba: {currentAppointment?.services?.name}</p>
+                </div>
+                <Button
+                  onClick={() => handleFinishAppointment(currentAppointment)}
+                  className="mt-4 bg-green-500 hover:bg-green-600 text-white"
+                >
+                  Ukončiť rezerváciu
+                </Button>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
 
-      <Dialog open={isFinishDialogOpen} onOpenChange={setIsFinishDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Finish Appointment</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="price">Enter Price</Label>
-            <Input
-              id="price"
-              type="number"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="Enter price"
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+            <StatCard
+              icon={DollarSign}
+              title="Mesačný zárobok"
+              value={`${employeeStats.monthlyEarnings.toFixed(2)} €`}
+              change="5.2"
+              changeType="increase"
+            />
+            <StatCard
+              icon={Star}
+              title="Hodnotenie"
+              value={employeeStats.rating}
+              change="0.3"
+              changeType="increase"
+            />
+            <StatCard
+              icon={Users}
+              title="Počet rezervácií"
+              value={employeeStats.totalAppointments}
+              change="3.1"
+              changeType="increase"
+            />
+            <StatCard
+              icon={Briefcase}
+              title="Mesačný cieľ"
+              value={`${(
+                (employeeStats.totalAppointments / employeeStats.monthlyGoal) *
+                100
+              ).toFixed(0)}%`}
+              change="2.5"
+              changeType="increase"
             />
           </div>
-          <DialogFooter>
-            <Button
-              onClick={() => setIsFinishDialogOpen(false)}
-              variant="outline"
-            >
-              Cancel
-            </Button>
-            <Button onClick={handlePriceSubmit}>Submit</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      <Dialog
-        open={isConfirmationDialogOpen}
-        onOpenChange={setIsConfirmationDialogOpen}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm Appointment Completion</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p>Are you sure you want to finish this appointment?</p>
-            <p>Price: {price}€</p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-2 bg-white shadow-xl rounded-lg overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+                <CardTitle className="text-2xl font-bold flex items-center">
+                  <CalendarIcon className="mr-2" />
+                  Váš pracovný kalendár
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="flex flex-col lg:flex-row space-y-6 lg:space-y-0 lg:space-x-6">
+                  <div className="flex-shrink-0">
+                    <div className="flex items-center justify-between mb-4">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() =>
+                          setCurrentMonth(subMonths(currentMonth, 1))
+                        }
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="font-medium text-lg">
+                        {format(currentMonth, "MMMM yyyy", { locale: sk })}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() =>
+                          setCurrentMonth(addMonths(currentMonth, 1))
+                        }
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={setSelectedDate}
+                      className="rounded-md border shadow"
+                      modifiers={{
+                        booked: (date) =>
+                          appointmentDays.has(format(date, "yyyy-MM-dd")),
+                      }}
+                      modifiersStyles={{
+                        booked: { backgroundColor: "#ec4899", color: "white" },
+                      }}
+                      month={currentMonth}
+                      onMonthChange={setCurrentMonth}
+                    />
+                  </div>
+                  <div className="flex-grow">
+                    <h3 className="text-xl font-semibold mb-4">
+                      Rozvrh na{" "}
+                      {format(selectedDate, "d. MMMM yyyy", { locale: sk })}
+                    </h3>
+                    {filteredAppointments.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Čas</TableHead>
+                            <TableHead>Klient</TableHead>
+                            <TableHead>Služba</TableHead>
+                            <TableHead>Akcia</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredAppointments.map((appointment) => (
+                            <TableRow key={appointment.id}>
+                              <TableCell className="font-medium">
+                                {format(
+                                  parseISO(appointment.start_time),
+                                  "HH:mm"
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {getClientDisplay(appointment)}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">
+                                  {appointment?.services?.name}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  onClick={() =>
+                                    handleFinishAppointment(appointment)
+                                  }
+                                  className="bg-green-500 hover:bg-green-600 text-white"
+                                  disabled={appointment.status === "completed"}
+                                >
+                                  {appointment.status === "completed"
+                                    ? "Completed"
+                                    : "Finish"}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-gray-500 italic">
+                        Žiadne rezervácie na tento deň.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white shadow-xl rounded-lg overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+                <CardTitle className="text-2xl font-bold flex items-center">
+                  <Briefcase className="mr-2" />
+                  Mesačný prehľad
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="flex flex-col space-y-4">
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-purple-600">
+                      {employeeStats.totalAppointments}
+                    </p>
+                    <p className="text-gray-600">Celkový počet rezervácií</p>
+                  </div>
+                  <div className="w-full">
+                    <Progress
+                      value={
+                        (employeeStats.totalAppointments /
+                          employeeStats.monthlyGoal) *
+                        100
+                      }
+                      className="h-4"
+                    />
+                    <p className="text-center text-sm text-gray-600 mt-2">
+                      {employeeStats.monthlyGoal} rezervácií tento mesiac
+                    </p>
+                  </div>
+                  <div className="mt-4">
+                    <h4 className="text-lg font-semibold mb-2">Top služby</h4>
+                    <ul className="space-y-2">
+                      {Object.entries(
+                        appointments.reduce((acc, appointment) => {
+                          const serviceName = appointment?.services?.name;
+                          acc[serviceName] = (acc[serviceName] || 0) + 1;
+                          return acc;
+                        }, {})
+                      )
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 3)
+                        .map(([service, count]) => (
+                          <li
+                            key={service}
+                            className="flex justify-between items-center"
+                          >
+                            <span>{service}</span>
+                            <Badge>{count}</Badge>
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-          <DialogFooter>
-            <Button
-              onClick={() => setIsConfirmationDialogOpen(false)}
-              variant="outline"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConfirmFinish}
-              className="bg-green-500 hover:bg-green-600 text-white"
-            >
-              Confirm
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+
+          <Card className="mt-6 bg-white shadow-xl rounded-lg overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+              <CardTitle className="text-2xl font-bold flex items-center">
+                <Clock className="mr-2" />
+                Nadchádzajúce rezervácie
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              {isLoading ? (
+                <p className="text-center text-gray-500">
+                  Načítavam rezervácie...
+                </p>
+              ) : appointments.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Dátum</TableHead>
+                      <TableHead>Čas</TableHead>
+                      <TableHead>Klient</TableHead>
+                      <TableHead>Služba</TableHead>
+                      <TableHead>Stav</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {appointments.slice(0, 5).map((appointment) => (
+                      <TableRow key={appointment.id}>
+                        <TableCell>
+                          {format(
+                            parseISO(appointment.start_time),
+                            "dd.MM.yyyy"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {format(parseISO(appointment.start_time), "HH:mm")}
+                        </TableCell>
+                        <TableCell>{getClientDisplay(appointment)}</TableCell>
+                        <TableCell>{appointment?.services?.name}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              appointment.status === "completed"
+                                ? "success"
+                                : "default"
+                            }
+                          >
+                            {appointment.status === "completed"
+                              ? "Completed"
+                              : "Scheduled"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-center text-gray-500">
+                  Žiadne nadchádzajúce rezervácie.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Dialog
+            open={isFinishDialogOpen}
+            onOpenChange={setIsFinishDialogOpen}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Ukončiť rezerváciu</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                <Label htmlFor="price">Zadajte cenu</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="Zadajte cenu"
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  onClick={() => setIsFinishDialogOpen(false)}
+                  variant="outline"
+                >
+                  Zrušiť
+                </Button>
+                <Button onClick={handlePriceSubmit}>Potvrdiť</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={isConfirmationDialogOpen}
+            onOpenChange={setIsConfirmationDialogOpen}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Potvrdiť ukončenie rezervácie</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                <p>Ste si istý, že chcete ukončiť túto rezerváciu?</p>
+                <p>Cena: {price}€</p>
+              </div>
+              <DialogFooter>
+                <Button
+                  onClick={() => setIsConfirmationDialogOpen(false)}
+                  variant="outline"
+                >
+                  Zrušiť
+                </Button>
+                <Button
+                  onClick={handleConfirmFinish}
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                >
+                  Potvrdiť
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={isConfirmationDialogOpen}
+            onOpenChange={setIsConfirmationDialogOpen}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Potvrdiť ukončenie rezervácie</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                <p>Ste si istý, že chcete ukončiť túto rezerváciu?</p>
+                <p>Cena: {price}€</p>
+              </div>
+              <DialogFooter>
+                <Button
+                  onClick={() => setIsConfirmationDialogOpen(false)}
+                  variant="outline"
+                >
+                  Zrušiť
+                </Button>
+                <Button
+                  onClick={handleConfirmFinish}
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                >
+                  Potvrdiť
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -1,15 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardFooter,
-} from "./ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import {
   Select,
   SelectContent,
@@ -19,18 +13,18 @@ import {
 } from "./ui/select";
 import { toast } from "react-hot-toast";
 
-const EmployeeRegistration = () => {
+const EmployeeRegistration = ({ onRegistrationComplete }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
-  const [speciality, setSpeciality] = useState("");
+
   const [facilityId, setFacilityId] = useState("");
   const [facilities, setFacilities] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchFacilities();
   }, []);
 
@@ -51,46 +45,53 @@ const EmployeeRegistration = () => {
     setLoading(true);
 
     try {
-      // 1. Create user account
+      // Create user account in Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            first_name: firstName,
-            last_name: lastName,
-            phone,
-          },
-        },
       });
 
       if (authError) throw authError;
 
-      // 2. Create employee record
+      // Insert additional user information into public.users table
+      const { error: userError } = await supabase.from("users").insert({
+        id: authData.user.id,
+        email: email,
+        first_name: firstName,
+        last_name: lastName,
+        phone: phone,
+        role: "employee",
+      });
+
+      if (userError) throw userError;
+
+      // Create employee record with pending status
       const { data: employeeData, error: employeeError } = await supabase
         .from("employees")
         .insert({
           user_id: authData.user.id,
-          speciality,
+
           facility_id: facilityId,
+          status: "pending",
         })
         .select()
         .single();
 
       if (employeeError) throw employeeError;
 
-      toast.success("Employee account created successfully");
+      toast.success("Registration submitted. Waiting for admin approval.");
+      onRegistrationComplete(); // Call the callback function to update parent component
       // Reset form
       setEmail("");
       setPassword("");
       setFirstName("");
       setLastName("");
       setPhone("");
-      setSpeciality("");
+
       setFacilityId("");
     } catch (error) {
       console.error("Error creating employee account:", error);
-      toast.error("Failed to create employee account");
+      toast.error("Failed to submit registration");
     } finally {
       setLoading(false);
     }
@@ -99,7 +100,7 @@ const EmployeeRegistration = () => {
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
-        <CardTitle>Register New Employee</CardTitle>
+        <CardTitle>Registrácia zamestnanca</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -114,7 +115,7 @@ const EmployeeRegistration = () => {
             />
           </div>
           <div>
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">Heslo</Label>
             <Input
               id="password"
               type="password"
@@ -124,7 +125,7 @@ const EmployeeRegistration = () => {
             />
           </div>
           <div>
-            <Label htmlFor="firstName">First Name</Label>
+            <Label htmlFor="firstName">Meno</Label>
             <Input
               id="firstName"
               value={firstName}
@@ -133,7 +134,7 @@ const EmployeeRegistration = () => {
             />
           </div>
           <div>
-            <Label htmlFor="lastName">Last Name</Label>
+            <Label htmlFor="lastName">Priezvisko</Label>
             <Input
               id="lastName"
               value={lastName}
@@ -142,7 +143,7 @@ const EmployeeRegistration = () => {
             />
           </div>
           <div>
-            <Label htmlFor="phone">Phone</Label>
+            <Label htmlFor="phone">Telefón</Label>
             <Input
               id="phone"
               type="tel"
@@ -151,20 +152,12 @@ const EmployeeRegistration = () => {
               required
             />
           </div>
+
           <div>
-            <Label htmlFor="speciality">Speciality</Label>
-            <Input
-              id="speciality"
-              value={speciality}
-              onChange={(e) => setSpeciality(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="facility">Facility</Label>
+            <Label htmlFor="facility">Preferovaná prevádzka</Label>
             <Select value={facilityId} onValueChange={setFacilityId} required>
               <SelectTrigger>
-                <SelectValue placeholder="Select facility" />
+                <SelectValue placeholder="Vyberte prevádzku" />
               </SelectTrigger>
               <SelectContent>
                 {facilities.map((facility) => (
@@ -176,7 +169,7 @@ const EmployeeRegistration = () => {
             </Select>
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Creating Account..." : "Create Employee Account"}
+            {loading ? "Odosielam..." : "Odoslať registráciu"}
           </Button>
         </form>
       </CardContent>

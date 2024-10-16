@@ -31,6 +31,7 @@ import {
 import { Users, DollarSign, Calendar, Star, Building } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { toast } from "react-hot-toast";
+import PendingEmployeesManager from "./PendingEmployeesManager";
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
@@ -51,6 +52,17 @@ const AdminDashboard = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [editingFacility, setEditingFacility] = useState(null);
+  const [newFacility, setNewFacility] = useState({
+    name: "",
+    address: "",
+    google_place_id: "", // Add this line
+  });
+  const handleEmployeeConfirmed = (newEmployee) => {
+    setEmployees([...employees, newEmployee]);
+    // You might want to refresh the users list here as well
+    fetchUsers();
+  };
+
   const [isEditEmployeeDialogOpen, setIsEditEmployeeDialogOpen] =
     useState(false);
   const [newUser, setNewUser] = useState({
@@ -59,10 +71,6 @@ const AdminDashboard = () => {
     first_name: "",
     last_name: "",
     role: "customer",
-  });
-  const [newFacility, setNewFacility] = useState({
-    name: "",
-    address: "",
   });
 
   useEffect(() => {
@@ -320,7 +328,7 @@ const AdminDashboard = () => {
       toast.success("Prevádzka bola úspešne pridaná");
       setIsAddFacilityDialogOpen(false);
       fetchFacilities();
-      setNewFacility({ name: "", address: "" });
+      setNewFacility({ name: "", address: "", google_place_id: "" }); // Update this line
     } catch (error) {
       console.error("Chyba pri pridávaní prevádzky:", error);
       toast.error("Nepodarilo sa pridať prevádzku");
@@ -391,124 +399,554 @@ const AdminDashboard = () => {
   );
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Administrátorský panel</h1>
+    <Card className="w-full  mx-auto bg-white shadow-2xl rounded-lg overflow-hidden">
+      <CardContent className="p-6 space-y-8">
+        <div className="space-y-6">
+          <h1 className="text-3xl font-bold">Administrátorský panel</h1>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Celkový počet používateľov"
-          value={stats.totalUsers}
-          icon={Users}
-        />
-        <StatCard
-          title="Celkové tržby"
-          value={`${stats.totalRevenue.toFixed(2)} €`}
-          icon={DollarSign}
-        />
-        <StatCard
-          title="Celkový počet rezervácií"
-          value={stats.totalAppointments}
-          icon={Calendar}
-        />
-        <StatCard
-          title="Priemerné hodnotenie"
-          value={stats.averageRating}
-          icon={Star}
-        />
-      </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              title="Celkový počet používateľov"
+              value={stats.totalUsers}
+              icon={Users}
+            />
+            <StatCard
+              title="Celkové tržby"
+              value={`${stats.totalRevenue.toFixed(2)} €`}
+              icon={DollarSign}
+            />
+            <StatCard
+              title="Celkový počet rezervácií"
+              value={stats.totalAppointments}
+              icon={Calendar}
+            />
+            <StatCard
+              title="Priemerné hodnotenie"
+              value={stats.averageRating}
+              icon={Star}
+            />
+          </div>
 
-      <Tabs defaultValue="users" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="users">Používatelia</TabsTrigger>
-          <TabsTrigger value="employees">Zamestnanci</TabsTrigger>
-          <TabsTrigger value="facilities">Prevádzky</TabsTrigger>
-        </TabsList>
+          <Tabs defaultValue="users" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="users">Používatelia</TabsTrigger>
+              <TabsTrigger value="employees">Zamestnanci</TabsTrigger>
+              <TabsTrigger value="facilities">Prevádzky</TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="users" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">Správa používateľov</h2>
-            <Dialog
-              open={isAddUserDialogOpen}
-              onOpenChange={setIsAddUserDialogOpen}
-            >
-              <DialogTrigger asChild>
-                <Button>Pridať používateľa</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Pridať nového používateľa</DialogTitle>
-                  <DialogDescription>
-                    Vyplňte údaje pre vytvorenie nového používateľa.
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleAddUser}>
+            <TabsContent value="users" className="space-y-4">
+              <PendingEmployeesManager
+                facilities={facilities}
+                onEmployeeConfirmed={handleEmployeeConfirmed}
+              />
+
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">Správa používateľov</h2>
+                <Dialog
+                  open={isAddUserDialogOpen}
+                  onOpenChange={setIsAddUserDialogOpen}
+                >
+                  <DialogTrigger asChild>
+                    <Button>Pridať používateľa</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Pridať nového používateľa</DialogTitle>
+                      <DialogDescription>
+                        Vyplňte údaje pre vytvorenie nového používateľa.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleAddUser}>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="email" className="text-right">
+                            Email
+                          </Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            className="col-span-3"
+                            value={newUser.email}
+                            onChange={(e) =>
+                              setNewUser({ ...newUser, email: e.target.value })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="password" className="text-right">
+                            Heslo
+                          </Label>
+                          <Input
+                            id="password"
+                            type="password"
+                            className="col-span-3"
+                            value={newUser.password}
+                            onChange={(e) =>
+                              setNewUser({
+                                ...newUser,
+                                password: e.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="first_name" className="text-right">
+                            Meno
+                          </Label>
+                          <Input
+                            id="first_name"
+                            className="col-span-3"
+                            value={newUser.first_name}
+                            onChange={(e) =>
+                              setNewUser({
+                                ...newUser,
+                                first_name: e.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="last_name" className="text-right">
+                            Priezvisko
+                          </Label>
+                          <Input
+                            id="last_name"
+                            className="col-span-3"
+                            value={newUser.last_name}
+                            onChange={(e) =>
+                              setNewUser({
+                                ...newUser,
+                                last_name: e.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="role" className="text-right">
+                            Rola
+                          </Label>
+                          <Select
+                            value={newUser.role}
+                            onValueChange={(value) =>
+                              setNewUser({ ...newUser, role: value })
+                            }
+                          >
+                            <SelectTrigger className="col-span-3">
+                              <SelectValue placeholder="Vyberte rolu" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="customer">Zákazník</SelectItem>
+                              <SelectItem value="employee">
+                                Zamestnanec
+                              </SelectItem>
+                              <SelectItem value="manager">Manažér</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button type="submit" disabled={loading}>
+                          {loading ? "Pridávanie..." : "Pridať používateľa"}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Meno</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Rola</TableHead>
+                    <TableHead>Akcie</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>{`${user.first_name} ${user.last_name}`}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>{user.role}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          className="mr-2"
+                          onClick={() => handleEditUser(user)}
+                        >
+                          Upraviť
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => handleDeleteUser(user.id)}
+                        >
+                          Vymazať
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TabsContent>
+
+            <TabsContent value="employees" className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">Správa zamestnancov</h2>
+              </div>
+              <Dialog
+                open={isEditEmployeeDialogOpen}
+                onOpenChange={setIsEditEmployeeDialogOpen}
+              >
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Upraviť zamestnanca</DialogTitle>
+                    <DialogDescription>
+                      Upravte údaje zamestnanca.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {editingEmployee && (
+                    <form onSubmit={handleUpdateEmployee}>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="edit_employee_first_name"
+                            className="text-right"
+                          >
+                            Meno
+                          </Label>
+                          <Input
+                            id="edit_employee_first_name"
+                            className="col-span-3"
+                            value={editingEmployee.first_name}
+                            onChange={(e) =>
+                              setEditingEmployee({
+                                ...editingEmployee,
+                                first_name: e.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="edit_employee_last_name"
+                            className="text-right"
+                          >
+                            Priezvisko
+                          </Label>
+                          <Input
+                            id="edit_employee_last_name"
+                            className="col-span-3"
+                            value={editingEmployee.last_name}
+                            onChange={(e) =>
+                              setEditingEmployee({
+                                ...editingEmployee,
+                                last_name: e.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="edit_employee_speciality"
+                            className="text-right"
+                          >
+                            Špecializácia
+                          </Label>
+                          <Input
+                            id="edit_employee_speciality"
+                            className="col-span-3"
+                            value={editingEmployee.speciality}
+                            onChange={(e) =>
+                              setEditingEmployee({
+                                ...editingEmployee,
+                                speciality: e.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="edit_employee_table_number"
+                            className="text-right"
+                          >
+                            Číslo stola
+                          </Label>
+                          <Input
+                            id="edit_employee_table_number"
+                            className="col-span-3"
+                            type="number"
+                            value={editingEmployee.table_number}
+                            onChange={(e) =>
+                              setEditingEmployee({
+                                ...editingEmployee,
+                                table_number: e.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="edit_employee_facility"
+                            className="text-right"
+                          >
+                            Prevádzka
+                          </Label>
+                          <Select
+                            value={editingEmployee.facility_id}
+                            onValueChange={(value) =>
+                              setEditingEmployee({
+                                ...editingEmployee,
+                                facility_id: value,
+                              })
+                            }
+                          >
+                            <SelectTrigger className="col-span-3">
+                              <SelectValue placeholder="Vyberte prevádzku" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {facilities.map((facility) => (
+                                <SelectItem
+                                  key={facility.id}
+                                  value={facility.id}
+                                >
+                                  {facility.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button type="submit" disabled={loading}>
+                          {loading
+                            ? "Aktualizácia..."
+                            : "Aktualizovať zamestnanca"}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  )}
+                </DialogContent>
+              </Dialog>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Meno</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Špecializácia</TableHead>
+                    <TableHead>Číslo stola</TableHead>
+                    <TableHead>Prevádzka</TableHead>
+                    <TableHead>Akcie</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {employees.map((employee) => (
+                    <TableRow key={employee.id}>
+                      <TableCell>{`${employee.users.first_name} ${employee.users.last_name}`}</TableCell>
+                      <TableCell>{employee.users.email}</TableCell>
+                      <TableCell>{employee.speciality}</TableCell>
+                      <TableCell>{employee.table_number}</TableCell>
+                      <TableCell>{employee.facilities?.name}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          className="mr-2"
+                          onClick={() => handleEditEmployee(employee)}
+                        >
+                          Upraviť
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TabsContent>
+
+            <TabsContent value="facilities" className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">Správa prevádzok</h2>
+                <Dialog
+                  open={isAddFacilityDialogOpen}
+                  onOpenChange={setIsAddFacilityDialogOpen}
+                >
+                  <DialogTrigger asChild>
+                    <Button>Pridať prevádzku</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Pridať novú prevádzku</DialogTitle>
+                      <DialogDescription>
+                        Vyplňte údaje pre vytvorenie novej prevádzky.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleAddFacility}>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="facility_name" className="text-right">
+                            Názov
+                          </Label>
+                          <Input
+                            id="facility_name"
+                            className="col-span-3"
+                            value={newFacility.name}
+                            onChange={(e) =>
+                              setNewFacility({
+                                ...newFacility,
+                                name: e.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="facility_address"
+                            className="text-right"
+                          >
+                            Adresa
+                          </Label>
+                          <Input
+                            id="facility_address"
+                            className="col-span-3"
+                            value={newFacility.address}
+                            onChange={(e) =>
+                              setNewFacility({
+                                ...newFacility,
+                                address: e.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="facility_google_place_id"
+                            className="text-right"
+                          >
+                            Google Place ID
+                          </Label>
+                          <Input
+                            id="facility_google_place_id"
+                            className="col-span-3"
+                            value={newFacility.google_place_id}
+                            onChange={(e) =>
+                              setNewFacility({
+                                ...newFacility,
+                                google_place_id: e.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button type="submit" disabled={loading}>
+                          {loading ? "Pridávanie..." : "Pridať prevádzku"}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Názov</TableHead>
+                    <TableHead>Adresa</TableHead>
+                    <TableHead>Akcie</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {facilities.map((facility) => (
+                    <TableRow key={facility.id}>
+                      <TableCell>{facility.name}</TableCell>
+                      <TableCell>{facility.address}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          className="mr-2"
+                          onClick={() => handleEditFacility(facility)}
+                        >
+                          Upraviť
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => handleDeleteFacility(facility.id)}
+                        >
+                          Vymazať
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TabsContent>
+          </Tabs>
+
+          <Dialog
+            open={isEditUserDialogOpen}
+            onOpenChange={setIsEditUserDialogOpen}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Upraviť používateľa</DialogTitle>
+                <DialogDescription>
+                  Upravte údaje používateľa.
+                </DialogDescription>
+              </DialogHeader>
+              {editingUser && (
+                <form onSubmit={handleUpdateUser}>
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="email" className="text-right">
-                        Email
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        className="col-span-3"
-                        value={newUser.email}
-                        onChange={(e) =>
-                          setNewUser({ ...newUser, email: e.target.value })
-                        }
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="password" className="text-right">
-                        Heslo
-                      </Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        className="col-span-3"
-                        value={newUser.password}
-                        onChange={(e) =>
-                          setNewUser({ ...newUser, password: e.target.value })
-                        }
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="first_name" className="text-right">
+                      <Label htmlFor="edit_first_name" className="text-right">
                         Meno
                       </Label>
                       <Input
-                        id="first_name"
+                        id="edit_first_name"
                         className="col-span-3"
-                        value={newUser.first_name}
+                        value={editingUser.first_name}
                         onChange={(e) =>
-                          setNewUser({ ...newUser, first_name: e.target.value })
+                          setEditingUser({
+                            ...editingUser,
+                            first_name: e.target.value,
+                          })
                         }
                         required
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="last_name" className="text-right">
+                      <Label htmlFor="edit_last_name" className="text-right">
                         Priezvisko
                       </Label>
                       <Input
-                        id="last_name"
+                        id="edit_last_name"
                         className="col-span-3"
-                        value={newUser.last_name}
+                        value={editingUser.last_name}
                         onChange={(e) =>
-                          setNewUser({ ...newUser, last_name: e.target.value })
+                          setEditingUser({
+                            ...editingUser,
+                            last_name: e.target.value,
+                          })
                         }
                         required
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="role" className="text-right">
+                      <Label htmlFor="edit_role" className="text-right">
                         Rola
                       </Label>
                       <Select
-                        value={newUser.role}
+                        value={editingUser.role}
                         onValueChange={(value) =>
-                          setNewUser({ ...newUser, role: value })
+                          setEditingUser({ ...editingUser, role: value })
                         }
                       >
                         <SelectTrigger className="col-span-3">
@@ -525,250 +963,40 @@ const AdminDashboard = () => {
                   </div>
                   <DialogFooter>
                     <Button type="submit" disabled={loading}>
-                      {loading ? "Pridávanie..." : "Pridať používateľa"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Meno</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Rola</TableHead>
-                <TableHead>Akcie</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>{`${user.first_name} ${user.last_name}`}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>{user.role}</TableCell>
-                  <TableCell>
-                    <Button
-                      variant="outline"
-                      className="mr-2"
-                      onClick={() => handleEditUser(user)}
-                    >
-                      Upraviť
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => handleDeleteUser(user.id)}
-                    >
-                      Vymazať
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TabsContent>
-
-        <TabsContent value="employees" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">Správa zamestnancov</h2>
-          </div>
-          <Dialog
-            open={isEditEmployeeDialogOpen}
-            onOpenChange={setIsEditEmployeeDialogOpen}
-          >
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Upraviť zamestnanca</DialogTitle>
-                <DialogDescription>
-                  Upravte údaje zamestnanca.
-                </DialogDescription>
-              </DialogHeader>
-              {editingEmployee && (
-                <form onSubmit={handleUpdateEmployee}>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label
-                        htmlFor="edit_employee_first_name"
-                        className="text-right"
-                      >
-                        Meno
-                      </Label>
-                      <Input
-                        id="edit_employee_first_name"
-                        className="col-span-3"
-                        value={editingEmployee.first_name}
-                        onChange={(e) =>
-                          setEditingEmployee({
-                            ...editingEmployee,
-                            first_name: e.target.value,
-                          })
-                        }
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label
-                        htmlFor="edit_employee_last_name"
-                        className="text-right"
-                      >
-                        Priezvisko
-                      </Label>
-                      <Input
-                        id="edit_employee_last_name"
-                        className="col-span-3"
-                        value={editingEmployee.last_name}
-                        onChange={(e) =>
-                          setEditingEmployee({
-                            ...editingEmployee,
-                            last_name: e.target.value,
-                          })
-                        }
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label
-                        htmlFor="edit_employee_speciality"
-                        className="text-right"
-                      >
-                        Špecializácia
-                      </Label>
-                      <Input
-                        id="edit_employee_speciality"
-                        className="col-span-3"
-                        value={editingEmployee.speciality}
-                        onChange={(e) =>
-                          setEditingEmployee({
-                            ...editingEmployee,
-                            speciality: e.target.value,
-                          })
-                        }
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label
-                        htmlFor="edit_employee_table_number"
-                        className="text-right"
-                      >
-                        Číslo stola
-                      </Label>
-                      <Input
-                        id="edit_employee_table_number"
-                        className="col-span-3"
-                        type="number"
-                        value={editingEmployee.table_number}
-                        onChange={(e) =>
-                          setEditingEmployee({
-                            ...editingEmployee,
-                            table_number: e.target.value,
-                          })
-                        }
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label
-                        htmlFor="edit_employee_facility"
-                        className="text-right"
-                      >
-                        Prevádzka
-                      </Label>
-                      <Select
-                        value={editingEmployee.facility_id}
-                        onValueChange={(value) =>
-                          setEditingEmployee({
-                            ...editingEmployee,
-                            facility_id: value,
-                          })
-                        }
-                      >
-                        <SelectTrigger className="col-span-3">
-                          <SelectValue placeholder="Vyberte prevádzku" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {facilities.map((facility) => (
-                            <SelectItem key={facility.id} value={facility.id}>
-                              {facility.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button type="submit" disabled={loading}>
-                      {loading ? "Aktualizácia..." : "Aktualizovať zamestnanca"}
+                      {loading ? "Aktualizácia..." : "Aktualizovať používateľa"}
                     </Button>
                   </DialogFooter>
                 </form>
               )}
             </DialogContent>
           </Dialog>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Meno</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Špecializácia</TableHead>
-                <TableHead>Číslo stola</TableHead>
-                <TableHead>Prevádzka</TableHead>
-                <TableHead>Akcie</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {employees.map((employee) => (
-                <TableRow key={employee.id}>
-                  <TableCell>{`${employee.users.first_name} ${employee.users.last_name}`}</TableCell>
-                  <TableCell>{employee.users.email}</TableCell>
-                  <TableCell>{employee.speciality}</TableCell>
-                  <TableCell>{employee.table_number}</TableCell>
-                  <TableCell>{employee.facilities?.name}</TableCell>
-                  <TableCell>
-                    <Button
-                      variant="outline"
-                      className="mr-2"
-                      onClick={() => handleEditEmployee(employee)}
-                    >
-                      Upraviť
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TabsContent>
 
-        <TabsContent value="facilities" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">Správa prevádzok</h2>
-            <Dialog
-              open={isAddFacilityDialogOpen}
-              onOpenChange={setIsAddFacilityDialogOpen}
-            >
-              <DialogTrigger asChild>
-                <Button>Pridať prevádzku</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Pridať novú prevádzku</DialogTitle>
-                  <DialogDescription>
-                    Vyplňte údaje pre vytvorenie novej prevádzky.
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleAddFacility}>
+          <Dialog
+            open={isEditFacilityDialogOpen}
+            onOpenChange={setIsEditFacilityDialogOpen}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Upraviť prevádzku</DialogTitle>
+                <DialogDescription>Upravte údaje prevádzky.</DialogDescription>
+              </DialogHeader>
+              {editingFacility && (
+                <form onSubmit={handleUpdateFacility}>
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="facility_name" className="text-right">
+                      <Label
+                        htmlFor="edit_facility_name"
+                        className="text-right"
+                      >
                         Názov
                       </Label>
                       <Input
-                        id="facility_name"
+                        id="edit_facility_name"
                         className="col-span-3"
-                        value={newFacility.name}
+                        value={editingFacility.name}
                         onChange={(e) =>
-                          setNewFacility({
-                            ...newFacility,
+                          setEditingFacility({
+                            ...editingFacility,
                             name: e.target.value,
                           })
                         }
@@ -776,16 +1004,19 @@ const AdminDashboard = () => {
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="facility_address" className="text-right">
+                      <Label
+                        htmlFor="edit_facility_address"
+                        className="text-right"
+                      >
                         Adresa
                       </Label>
                       <Input
-                        id="facility_address"
+                        id="edit_facility_address"
                         className="col-span-3"
-                        value={newFacility.address}
+                        value={editingFacility.address}
                         onChange={(e) =>
-                          setNewFacility({
-                            ...newFacility,
+                          setEditingFacility({
+                            ...editingFacility,
                             address: e.target.value,
                           })
                         }
@@ -795,183 +1026,16 @@ const AdminDashboard = () => {
                   </div>
                   <DialogFooter>
                     <Button type="submit" disabled={loading}>
-                      {loading ? "Pridávanie..." : "Pridať prevádzku"}
+                      {loading ? "Aktualizácia..." : "Aktualizovať prevádzku"}
                     </Button>
                   </DialogFooter>
                 </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Názov</TableHead>
-                <TableHead>Adresa</TableHead>
-                <TableHead>Akcie</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {facilities.map((facility) => (
-                <TableRow key={facility.id}>
-                  <TableCell>{facility.name}</TableCell>
-                  <TableCell>{facility.address}</TableCell>
-                  <TableCell>
-                    <Button
-                      variant="outline"
-                      className="mr-2"
-                      onClick={() => handleEditFacility(facility)}
-                    >
-                      Upraviť
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => handleDeleteFacility(facility.id)}
-                    >
-                      Vymazať
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TabsContent>
-      </Tabs>
-
-      <Dialog
-        open={isEditUserDialogOpen}
-        onOpenChange={setIsEditUserDialogOpen}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Upraviť používateľa</DialogTitle>
-            <DialogDescription>Upravte údaje používateľa.</DialogDescription>
-          </DialogHeader>
-          {editingUser && (
-            <form onSubmit={handleUpdateUser}>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit_first_name" className="text-right">
-                    Meno
-                  </Label>
-                  <Input
-                    id="edit_first_name"
-                    className="col-span-3"
-                    value={editingUser.first_name}
-                    onChange={(e) =>
-                      setEditingUser({
-                        ...editingUser,
-                        first_name: e.target.value,
-                      })
-                    }
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit_last_name" className="text-right">
-                    Priezvisko
-                  </Label>
-                  <Input
-                    id="edit_last_name"
-                    className="col-span-3"
-                    value={editingUser.last_name}
-                    onChange={(e) =>
-                      setEditingUser({
-                        ...editingUser,
-                        last_name: e.target.value,
-                      })
-                    }
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit_role" className="text-right">
-                    Rola
-                  </Label>
-                  <Select
-                    value={editingUser.role}
-                    onValueChange={(value) =>
-                      setEditingUser({ ...editingUser, role: value })
-                    }
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Vyberte rolu" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="customer">Zákazník</SelectItem>
-                      <SelectItem value="employee">Zamestnanec</SelectItem>
-                      <SelectItem value="manager">Manažér</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={loading}>
-                  {loading ? "Aktualizácia..." : "Aktualizovať používateľa"}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={isEditFacilityDialogOpen}
-        onOpenChange={setIsEditFacilityDialogOpen}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Upraviť prevádzku</DialogTitle>
-            <DialogDescription>Upravte údaje prevádzky.</DialogDescription>
-          </DialogHeader>
-          {editingFacility && (
-            <form onSubmit={handleUpdateFacility}>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit_facility_name" className="text-right">
-                    Názov
-                  </Label>
-                  <Input
-                    id="edit_facility_name"
-                    className="col-span-3"
-                    value={editingFacility.name}
-                    onChange={(e) =>
-                      setEditingFacility({
-                        ...editingFacility,
-                        name: e.target.value,
-                      })
-                    }
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit_facility_address" className="text-right">
-                    Adresa
-                  </Label>
-                  <Input
-                    id="edit_facility_address"
-                    className="col-span-3"
-                    value={editingFacility.address}
-                    onChange={(e) =>
-                      setEditingFacility({
-                        ...editingFacility,
-                        address: e.target.value,
-                      })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={loading}>
-                  {loading ? "Aktualizácia..." : "Aktualizovať prevádzku"}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

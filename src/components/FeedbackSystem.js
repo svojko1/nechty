@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { sk } from "date-fns/locale";
 import { Star, Calendar, Clock, User, CheckCircle } from "lucide-react";
@@ -6,51 +6,65 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
 import { Textarea } from "./ui/textarea";
 import { toast } from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
-
-// Mock data for employees
-const employees = [
-  { id: 1, name: "Jana Nováková" },
-  { id: 2, name: "Eva Svobodová" },
-  { id: 3, name: "Mária Kováčová" },
-  { id: 4, name: "Anna Horváthová" },
-];
+import { useParams } from "react-router-dom";
+import { supabase } from "../supabaseClient";
 
 const FeedbackPage = () => {
+  const { employeeId } = useParams();
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [comment, setComment] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [employee, setEmployee] = useState(null);
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    fetchEmployeeDetails();
+  }, [employeeId]);
+
+  const fetchEmployeeDetails = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("*, users(first_name, last_name)")
+        .eq("id", employeeId)
+        .single();
+
+      if (error) throw error;
+      setEmployee(data);
+    } catch (error) {
+      console.error("Error fetching employee details:", error);
+      toast.error("Failed to fetch employee details");
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Here you would typically send this data to your backend
-    console.log({
-      appointmentDate,
-      appointmentTime,
-      employeeId,
-      rating,
-      comment,
-    });
-    setIsSubmitted(true);
+    try {
+      const { data, error } = await supabase.from("feedback").insert({
+        employee_id: employeeId,
+        appointment_date: `${appointmentDate}T${appointmentTime}:00`,
+        rating,
+        comment,
+      });
+
+      if (error) throw error;
+
+      setIsSubmitted(true);
+      toast.success("Feedback submitted successfully!");
+    } catch (error) {
+      console.error("Error submitting feedback:", error);
+      toast.error("Failed to submit feedback");
+    }
   };
 
   const resetForm = () => {
     setAppointmentDate("");
     setAppointmentTime("");
-    setEmployeeId("");
     setRating(0);
     setComment("");
     setIsSubmitted(false);
@@ -98,6 +112,14 @@ const FeedbackPage = () => {
             </CardHeader>
             <CardContent className="p-6">
               <form onSubmit={handleSubmit} className="space-y-4">
+                {employee && (
+                  <div className="mb-4">
+                    <Label className="font-semibold">Zamestnanec</Label>
+                    <p className="text-lg">
+                      {employee.users.first_name} {employee.users.last_name}
+                    </p>
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="appointment-date">Dátum návštevy</Label>
                   <div className="relative">
@@ -132,29 +154,6 @@ const FeedbackPage = () => {
                       size={20}
                     />
                   </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="employee-select">Zamestnanec</Label>
-                  <Select
-                    value={employeeId}
-                    onValueChange={setEmployeeId}
-                    required
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Vyberte zamestnanca" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {employees.map((employee) => (
-                        <SelectItem
-                          key={employee.id}
-                          value={employee.id.toString()}
-                        >
-                          {employee.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 <div>
