@@ -434,31 +434,33 @@ function EmployeeDashboard({ session }) {
             </CardContent>
           </Card>
 
-          {currentAppointment && (
-            <Card className="mb-6 bg-white shadow-xl rounded-lg overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-                <CardTitle className="text-2xl font-bold flex items-center">
-                  <Clock className="mr-2" />
-                  Aktuálna rezervácia
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <EnhancedAppointmentTimer appointment={currentAppointment} />
-                <div className="mt-4">
-                  <p className="font-semibold">
-                    Klient: {getClientDisplay(currentAppointment)}
-                  </p>
-                  <p>Služba: {currentAppointment?.services?.name}</p>
-                </div>
-                <Button
-                  onClick={() => handleFinishAppointment(currentAppointment)}
-                  className="mt-4 bg-green-500 hover:bg-green-600 text-white"
-                >
-                  Ukončiť rezerváciu
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+          <Card className="mb-6 bg-white shadow-xl rounded-lg overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+              <CardTitle className="text-2xl font-bold flex items-center">
+                <Clock className="mr-2" />
+                Aktuálna rezervácia
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <EnhancedAppointmentTimer appointment={currentAppointment} />{" "}
+              <div className="mt-4">
+                <p className="font-semibold">
+                  Klient:
+                  {currentAppointment && getClientDisplay(currentAppointment)}
+                </p>
+                <p>Služba: {currentAppointment?.services?.name}</p>
+              </div>
+              {currentAppointment &&
+                getClientDisplay(
+                  <Button
+                    onClick={() => handleFinishAppointment(currentAppointment)}
+                    className="mt-4 bg-green-500 hover:bg-green-600 text-white"
+                  >
+                    Ukončiť rezerváciu
+                  </Button>
+                )}
+            </CardContent>
+          </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
             <StatCard

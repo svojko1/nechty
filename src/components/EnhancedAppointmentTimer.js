@@ -1,43 +1,58 @@
 import React, { useState, useEffect } from "react";
-import {
-  format,
-  differenceInSeconds,
-  isPast,
-  isToday,
-  addDays,
-} from "date-fns";
+import { format, differenceInSeconds, isPast, isToday } from "date-fns";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+import { toast } from "react-hot-toast";
+import { supabase } from "../supabaseClient";
 import {
   Clock,
   Calendar,
   ArrowRight,
   Maximize2,
   Minimize2,
+  CheckCircle,
+  User,
 } from "lucide-react";
 
-const EnhancedAppointmentTimer = ({ appointment }) => {
+const EnhancedAppointmentTimer = ({ appointment, onAppointmentFinished }) => {
   const [timeLeft, setTimeLeft] = useState(0);
-  const [status, setStatus] = useState("upcoming");
+  const [status, setStatus] = useState("waiting");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
+  const [isConfirmationDialogOpen, setIsConfirmationDialogOpen] =
+    useState(false);
+  const [price, setPrice] = useState("");
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = new Date();
-      const start = new Date(appointment.start_time);
-      const end = new Date(appointment.end_time);
+      if (appointment) {
+        const now = new Date();
+        const start = new Date(appointment.start_time);
+        const end = new Date(appointment.end_time);
 
-      if (isPast(end)) {
-        const overtimeSeconds = differenceInSeconds(now, end);
-        setTimeLeft(overtimeSeconds);
-        setStatus(overtimeSeconds > 900 ? "overdue" : "overtime");
-      } else if (isPast(start)) {
-        setTimeLeft(differenceInSeconds(end, now));
-        setStatus("in-progress");
+        if (isPast(end)) {
+          const overtimeSeconds = differenceInSeconds(now, end);
+          setTimeLeft(overtimeSeconds);
+          setStatus(overtimeSeconds > 900 ? "overdue" : "overtime");
+        } else if (isPast(start)) {
+          setTimeLeft(differenceInSeconds(end, now));
+          setStatus("in-progress");
+        } else {
+          setTimeLeft(differenceInSeconds(now, start));
+          setStatus("upcoming");
+        }
       } else {
-        setTimeLeft(differenceInSeconds(now, start));
-        setStatus("upcoming");
+        setStatus("waiting");
       }
     }, 1000);
 
@@ -67,6 +82,8 @@ const EnhancedAppointmentTimer = ({ appointment }) => {
         return "bg-yellow-100 border-yellow-500 text-yellow-700";
       case "overdue":
         return "bg-red-100 border-red-500 text-red-700";
+      case "waiting":
+        return "bg-blue-100 border-blue-500 text-blue-700";
       default:
         return "bg-blue-100 border-blue-500 text-blue-700";
     }
@@ -82,15 +99,18 @@ const EnhancedAppointmentTimer = ({ appointment }) => {
         return "Prekročený čas";
       case "overdue":
         return "Výrazne prekročený čas";
+      case "waiting":
+        return "";
       default:
         return "";
     }
   };
 
   const renderTimeInfo = () => {
+    if (!appointment) return null;
+
     const start = new Date(appointment.start_time);
     const end = new Date(appointment.end_time);
-    const isUpcoming = status === "upcoming";
     const appointmentDate = isToday(start)
       ? "Dnes"
       : format(start, "dd.MM.yyyy");
@@ -107,6 +127,8 @@ const EnhancedAppointmentTimer = ({ appointment }) => {
               ? "Čaká sa"
               : status === "in-progress"
               ? "Prebieha"
+              : status === "waiting"
+              ? "Čaká sa"
               : "Prekročené"}
           </Badge>
         </div>
@@ -129,7 +151,13 @@ const EnhancedAppointmentTimer = ({ appointment }) => {
       ? "text-6xl font-bold"
       : "text-2xl font-bold";
 
-    if (status === "upcoming") {
+    if (status === "waiting") {
+      return (
+        <div className="text-center mt-2">
+          <p className={timerClasses}>Čakajte na ďalšieho zákaznika</p>
+        </div>
+      );
+    } else if (status === "upcoming") {
       return (
         <div className="text-center mt-2">
           <p className="text-sm font-medium">Začína za</p>
@@ -164,39 +192,151 @@ const EnhancedAppointmentTimer = ({ appointment }) => {
     setIsFullscreen(!isFullscreen);
   };
 
+  const handleFinishAppointment = () => {
+    setIsFinishDialogOpen(true);
+  };
+
+  const handlePriceSubmit = () => {
+    if (!price || isNaN(parseFloat(price))) {
+      toast.error("Prosím, zadajte platnú cenu");
+      return;
+    }
+    setIsFinishDialogOpen(false);
+    setIsConfirmationDialogOpen(true);
+  };
+
+  const handleConfirmFinish = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("appointments")
+        .update({
+          status: "completed",
+          price: parseFloat(price),
+          end_time: new Date().toISOString(),
+        })
+        .eq("id", appointment.id)
+        .select();
+
+      if (error) throw error;
+
+      toast.success("Rezervácia bola úspešne ukončená");
+      setIsConfirmationDialogOpen(false);
+      onAppointmentFinished(data);
+    } catch (error) {
+      console.error("Chyba pri ukončovaní rezervácie:", error);
+      toast.error("Nepodarilo sa ukončiť rezerváciu");
+    }
+  };
+
   return (
-    <Card
-      className={`${getStatusColor()} border-l-4 transition-colors duration-300 ${
-        isFullscreen
-          ? "fixed inset-0 z-50 flex items-center justify-center"
-          : ""
-      }`}
-    >
-      <CardContent className={`p-4 ${isFullscreen ? "text-center" : ""}`}>
-        <div className="flex justify-between items-center mb-2">
-          <h3 className="text-lg font-semibold">{getStatusText()}</h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={toggleFullscreen}
-            className={isFullscreen ? "absolute top-2 right-2" : ""}
-          >
-            {isFullscreen ? (
-              <Minimize2 className="h-4 w-4" />
-            ) : (
-              <Maximize2 className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-        {renderTimeInfo()}
-        {renderTimer()}
-        {isFullscreen && (
-          <div className="mt-4">
-            <p className="text-xl font-semibold">{appointment.services.name}</p>
+    <>
+      <Card
+        className={`${getStatusColor()} border-l-4 transition-colors duration-300 ${
+          isFullscreen
+            ? "fixed inset-0 z-50 flex items-center justify-center"
+            : ""
+        }`}
+      >
+        <CardContent className={`p-4 ${isFullscreen ? "text-center" : ""}`}>
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-lg font-semibold">{getStatusText()}</h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleFullscreen}
+              className={isFullscreen ? "absolute top-2 right-2" : ""}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
           </div>
-        )}
-      </CardContent>
-    </Card>
+          {renderTimeInfo()}
+          {renderTimer()}
+          {isFullscreen && appointment && (
+            <div className="mt-4 space-y-4">
+              <p className="text-xl font-semibold">
+                {appointment.services.name}
+              </p>
+              <p className="text-lg">{appointment.customer_name}</p>
+              <Button
+                onClick={handleFinishAppointment}
+                className="w-full bg-green-500 hover:bg-green-600 text-white py-4 text-lg rounded-full"
+              >
+                Ukončiť rezerváciu
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={isFinishDialogOpen} onOpenChange={setIsFinishDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ukončiť rezerváciu</DialogTitle>
+            <DialogDescription>
+              Zadajte konečnú cenu za službu.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              type="number"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="Zadajte cenu"
+              className="text-lg py-6"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setIsFinishDialogOpen(false)}
+              variant="outline"
+            >
+              Zrušiť
+            </Button>
+            <Button
+              onClick={handlePriceSubmit}
+              className="bg-green-500 hover:bg-green-600 text-white"
+            >
+              Potvrdiť
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isConfirmationDialogOpen}
+        onOpenChange={setIsConfirmationDialogOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Potvrdiť ukončenie rezervácie</DialogTitle>
+            <DialogDescription>
+              Ste si istý, že chcete ukončiť túto rezerváciu?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-lg font-semibold">Cena: {price} €</p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setIsConfirmationDialogOpen(false)}
+              variant="outline"
+            >
+              Zrušiť
+            </Button>
+            <Button
+              onClick={handleConfirmFinish}
+              className="bg-green-500 hover:bg-green-600 text-white"
+            >
+              Potvrdiť ukončenie
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

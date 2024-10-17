@@ -559,6 +559,12 @@ function BookingSystem({ facilityId }) {
       staffName = `${selectedStaff.users.first_name} ${selectedStaff.users.last_name}`;
     }
 
+    // Ensure we have valid date and time values
+    const appointmentDate = selectedDate ? new Date(selectedDate) : new Date();
+    const appointmentTime = selectedTime
+      ? parseISO(`2000-01-01T${selectedTime}`)
+      : new Date();
+
     return (
       <div className="space-y-6">
         <h3 className="text-2xl font-semibold text-gray-800 mb-4">
@@ -569,12 +575,12 @@ function BookingSystem({ facilityId }) {
             <div className="flex items-center space-x-2">
               <CalendarIcon className="w-5 h-5 text-pink-500" />
               <span>
-                {format(selectedDate, "d. MMMM yyyy", { locale: sk })}
+                {format(appointmentDate, "d. MMMM yyyy", { locale: sk })}
               </span>
             </div>
             <div className="flex items-center space-x-2">
               <ClockIcon className="w-5 h-5 text-pink-500" />
-              <span>{selectedTime}</span>
+              <span>{format(appointmentTime, "HH:mm")}</span>
             </div>
             <div className="flex items-center space-x-2">
               <User className="w-5 h-5 text-pink-500" />

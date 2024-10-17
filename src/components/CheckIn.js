@@ -207,8 +207,20 @@ const CheckIn = () => {
     }
 
     await handleWalkIn(walkInName, walkInContact);
+    // Set a timeout to redirect after 5 seconds
+
+    setTimeout(() => {
+      setStep("initial");
+      resetForm(); // You may need to create this function to reset all form states
+    }, 5000);
   };
 
+  const resetForm = () => {
+    setWalkInName("");
+    setWalkInContact("");
+    setSelectedService(null);
+    // Reset any other relevant state variables
+  };
   const handleWalkIn = async (customerName, phoneOrEmail) => {
     setIsLoading(true);
     try {
