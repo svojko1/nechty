@@ -74,6 +74,7 @@ function EmployeeDashboard({ session }) {
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [queueId, setQueueId] = useState(null);
   const [employeeData, setEmployeeData] = useState(null);
+  const [isApproved, setIsApproved] = useState(false);
 
   useEffect(() => {
     if (session && session.user) {
@@ -233,6 +234,7 @@ function EmployeeDashboard({ session }) {
       if (error) throw error;
 
       setEmployeeData(data);
+      setIsApproved(data.status === "approved");
     } catch (error) {
       console.error("Error fetching employee data:", error);
       toast.error("Failed to fetch employee data. Please try again.");
@@ -381,7 +383,38 @@ function EmployeeDashboard({ session }) {
   const appointmentDays = new Set(
     appointments.map((a) => format(parseISO(a.start_time), "yyyy-MM-dd"))
   );
+  const renderCheckInOutButton = () => {
+    if (!isApproved) {
+      return (
+        <div
+          className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4"
+          role="alert"
+        >
+          <p className="font-bold">Neschválený</p>
+          <p>
+            Vaše konto čaká na schválenie administrátorom. Prosím, skontrolujte
+            to neskôr.
+          </p>
+        </div>
+      );
+    }
 
+    return isCheckedIn ? (
+      <Button
+        onClick={handleCheckOut}
+        className="bg-red-500 hover:bg-red-600 text-white"
+      >
+        Check Out
+      </Button>
+    ) : (
+      <Button
+        onClick={handleCheckIn}
+        className="bg-green-500 hover:bg-green-600 text-white"
+      >
+        Check In
+      </Button>
+    );
+  };
   return (
     <Card className="w-full  mx-auto bg-white shadow-2xl rounded-lg overflow-hidden">
       <CardContent className="p-6 space-y-8">
@@ -397,21 +430,7 @@ function EmployeeDashboard({ session }) {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
-              {isCheckedIn ? (
-                <Button
-                  onClick={handleCheckOut}
-                  className="bg-red-500 hover:bg-red-600 text-white"
-                >
-                  Check Out
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleCheckIn}
-                  className="bg-green-500 hover:bg-green-600 text-white"
-                >
-                  Check In
-                </Button>
-              )}
+              {renderCheckInOutButton()}
             </CardContent>
           </Card>
 

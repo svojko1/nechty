@@ -11,6 +11,18 @@ import {
   TableHeader,
   TableRow,
 } from "./ui/table";
+import { Checkbox } from "./ui/checkbox";
+import { ScrollArea } from "./ui/scroll-area";
+
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "./ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -51,12 +63,18 @@ const AdminDashboard = () => {
     useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [editingEmployee, setEditingEmployee] = useState(null);
-  const [editingFacility, setEditingFacility] = useState(null);
+  const [editingFacility, setEditingFacility] = useState({
+    id: null,
+    name: "",
+    address: "",
+    employees: [],
+  });
   const [newFacility, setNewFacility] = useState({
     name: "",
     address: "",
-    google_place_id: "", // Add this line
+    google_place_id: "",
   });
+  const [facilityEmployees, setFacilityEmployees] = useState([]);
   const handleEmployeeConfirmed = (newEmployee) => {
     setEmployees([...employees, newEmployee]);
     // You might want to refresh the users list here as well
@@ -94,6 +112,26 @@ const AdminDashboard = () => {
       toast.error("Nepodarilo sa načítať používateľov");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFacilityEmployees = async (facilityId) => {
+    try {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id, users (id, first_name, last_name)")
+        .eq("facility_id", facilityId);
+
+      if (error) throw error;
+      setFacilityEmployees(
+        data.map((emp) => ({
+          value: emp.id,
+          label: `${emp.users.first_name} ${emp.users.last_name}`,
+        }))
+      );
+    } catch (error) {
+      console.error("Error fetching facility employees:", error);
+      toast.error("Failed to fetch facility employees");
     }
   };
 
@@ -337,16 +375,48 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleEditFacility = (facility) => {
-    setEditingFacility(facility);
+  const handleEditFacility = async (facility) => {
+    setEditingFacility({
+      ...facility,
+      employees: [],
+    });
     setIsEditFacilityDialogOpen(true);
+    await fetchAllEmployees(facility.id);
+  };
+
+  const fetchAllEmployees = async (facilityId) => {
+    try {
+      const { data: allEmployees, error: allEmployeesError } = await supabase
+        .from("employees")
+        .select("id, users (id, first_name, last_name), facility_id")
+        .order("users(first_name)", { ascending: true });
+
+      if (allEmployeesError) throw allEmployeesError;
+
+      const formattedEmployees = allEmployees.map((emp) => ({
+        value: emp.id,
+        label: `${emp.users.first_name} ${emp.users.last_name}`,
+        isSelected: emp.facility_id === facilityId,
+      }));
+
+      setFacilityEmployees(formattedEmployees);
+      setEditingFacility((prev) => ({
+        ...prev,
+        employees: formattedEmployees.filter((emp) => emp.isSelected),
+      }));
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+      toast.error("Failed to fetch employees");
+      setFacilityEmployees([]);
+      setEditingFacility((prev) => ({ ...prev, employees: [] }));
+    }
   };
 
   const handleUpdateFacility = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase
+      const { error: facilityError } = await supabase
         .from("facilities")
         .update({
           name: editingFacility.name,
@@ -354,14 +424,35 @@ const AdminDashboard = () => {
         })
         .eq("id", editingFacility.id);
 
-      if (error) throw error;
+      if (facilityError) throw facilityError;
 
-      toast.success("Prevádzka bola úspešne aktualizovaná");
+      // Update employee associations
+      const selectedEmployeeIds = editingFacility.employees.map(
+        (emp) => emp.value
+      );
+
+      // Set facility_id for selected employees
+      if (selectedEmployeeIds.length > 0) {
+        await supabase
+          .from("employees")
+          .update({ facility_id: editingFacility.id })
+          .in("id", selectedEmployeeIds);
+      }
+
+      // Remove facility_id for unselected employees
+      await supabase
+        .from("employees")
+        .update({ facility_id: null })
+        .eq("facility_id", editingFacility.id)
+        .not("id", "in", `(${selectedEmployeeIds.join(",")})`);
+
+      toast.success("Facility and employees updated successfully");
       setIsEditFacilityDialogOpen(false);
       fetchFacilities();
+      fetchEmployees();
     } catch (error) {
-      console.error("Chyba pri aktualizácii prevádzky:", error);
-      toast.error("Nepodarilo sa aktualizovať prevádzku");
+      console.error("Error updating facility:", error);
+      toast.error("Failed to update facility");
     } finally {
       setLoading(false);
     }
@@ -404,29 +495,6 @@ const AdminDashboard = () => {
         <div className="space-y-6">
           <h1 className="text-3xl font-bold">Administrátorský panel</h1>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              title="Celkový počet používateľov"
-              value={stats.totalUsers}
-              icon={Users}
-            />
-            <StatCard
-              title="Celkové tržby"
-              value={`${stats.totalRevenue.toFixed(2)} €`}
-              icon={DollarSign}
-            />
-            <StatCard
-              title="Celkový počet rezervácií"
-              value={stats.totalAppointments}
-              icon={Calendar}
-            />
-            <StatCard
-              title="Priemerné hodnotenie"
-              value={stats.averageRating}
-              icon={Star}
-            />
-          </div>
-
           <Tabs defaultValue="users" className="space-y-4">
             <TabsList>
               <TabsTrigger value="users">Používatelia</TabsTrigger>
@@ -437,11 +505,14 @@ const AdminDashboard = () => {
             <TabsContent value="users" className="space-y-4">
               <PendingEmployeesManager
                 facilities={facilities}
-                onEmployeeConfirmed={handleEmployeeConfirmed}
+                onEmployeeConfirmed={(newEmployee) => {
+                  setEmployees([...employees, newEmployee]);
+                  fetchEmployees();
+                }}
               />
 
-              <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold">Správa používateľov</h2>
+              <div className="flex justify-center items-center">
+                <h2 className="text-2xl font-bold"></h2>
                 <Dialog
                   open={isAddUserDialogOpen}
                   onOpenChange={setIsAddUserDialogOpen}
@@ -558,40 +629,6 @@ const AdminDashboard = () => {
                   </DialogContent>
                 </Dialog>
               </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Meno</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Rola</TableHead>
-                    <TableHead>Akcie</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>{`${user.first_name} ${user.last_name}`}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>{user.role}</TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outline"
-                          className="mr-2"
-                          onClick={() => handleEditUser(user)}
-                        >
-                          Upraviť
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          onClick={() => handleDeleteUser(user.id)}
-                        >
-                          Vymazať
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
             </TabsContent>
 
             <TabsContent value="employees" className="space-y-4">
@@ -744,9 +781,10 @@ const AdminDashboard = () => {
                     <TableHead>Špecializácia</TableHead>
                     <TableHead>Číslo stola</TableHead>
                     <TableHead>Prevádzka</TableHead>
-                    <TableHead>Akcie</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
                   {employees.map((employee) => (
                     <TableRow key={employee.id}>
@@ -755,6 +793,7 @@ const AdminDashboard = () => {
                       <TableCell>{employee.speciality}</TableCell>
                       <TableCell>{employee.table_number}</TableCell>
                       <TableCell>{employee.facilities?.name}</TableCell>
+                      <TableCell>{employee.status}</TableCell>
                       <TableCell>
                         <Button
                           variant="outline"
@@ -861,7 +900,7 @@ const AdminDashboard = () => {
                   <TableRow>
                     <TableHead>Názov</TableHead>
                     <TableHead>Adresa</TableHead>
-                    <TableHead>Akcie</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1022,6 +1061,80 @@ const AdminDashboard = () => {
                         }
                         required
                       />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label
+                        htmlFor="edit_facility_employees"
+                        className="text-right"
+                      >
+                        Zamestnanci
+                      </Label>
+                      <div className="col-span-3">
+                        <Popover modal={true}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start"
+                            >
+                              {editingFacility.employees.length > 0
+                                ? `${editingFacility.employees.length} ${
+                                    editingFacility.employees.length === 1
+                                      ? "zamestnanec vybratý"
+                                      : "zamestnanci vybratí"
+                                  }`
+                                : "Vybrať zamestnancov"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-0" sideOffset={5}>
+                            <Command>
+                              <CommandInput placeholder="Vyhľadať zamestnancov..." />
+                              <CommandList>
+                                <CommandEmpty>
+                                  Žiadni zamestnanci neboli nájdení.
+                                </CommandEmpty>
+                                <CommandGroup>
+                                  <ScrollArea className="h-[200px]">
+                                    {facilityEmployees.map((employee) => (
+                                      <CommandItem
+                                        key={employee.value}
+                                        onSelect={() => {
+                                          setEditingFacility((prev) => {
+                                            const isSelected =
+                                              prev.employees.some(
+                                                (e) =>
+                                                  e.value === employee.value
+                                              );
+                                            const updatedEmployees = isSelected
+                                              ? prev.employees.filter(
+                                                  (e) =>
+                                                    e.value !== employee.value
+                                                )
+                                              : [...prev.employees, employee];
+                                            return {
+                                              ...prev,
+                                              employees: updatedEmployees,
+                                            };
+                                          });
+                                        }}
+                                      >
+                                        <div className="flex items-center space-x-2 cursor-pointer">
+                                          <Checkbox
+                                            checked={editingFacility.employees.some(
+                                              (e) => e.value === employee.value
+                                            )}
+                                            onCheckedChange={() => {}}
+                                          />
+                                          <span>{employee.label}</span>
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </ScrollArea>
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     </div>
                   </div>
                   <DialogFooter>

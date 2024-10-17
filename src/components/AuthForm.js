@@ -125,10 +125,9 @@ const AuthForm = ({ setSession }) => {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="signin" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="signin">Prihlásiť</TabsTrigger>
-            <TabsTrigger value="signup">Registrovať</TabsTrigger>
-            <TabsTrigger value="employee">Zamestnanec</TabsTrigger>
+            <TabsTrigger value="employee">Registrovať</TabsTrigger>
           </TabsList>
           <TabsContent value="signin">
             <form onSubmit={handleSignIn}>
@@ -165,69 +164,7 @@ const AuthForm = ({ setSession }) => {
               </Button>
             </form>
           </TabsContent>
-          <TabsContent value="signup">
-            <form onSubmit={handleSignUp}>
-              <div className="grid w-full items-center gap-4">
-                <div className="flex flex-col space-y-1.5">
-                  <Label htmlFor="firstName">Meno</Label>
-                  <Input
-                    id="firstName"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="flex flex-col space-y-1.5">
-                  <Label htmlFor="lastName">Priezvisko</Label>
-                  <Input
-                    id="lastName"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="flex flex-col space-y-1.5">
-                  <Label htmlFor="phone">Telefón</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="flex flex-col space-y-1.5">
-                  <Label htmlFor="signupEmail">Email</Label>
-                  <Input
-                    id="signupEmail"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="flex flex-col space-y-1.5">
-                  <Label htmlFor="signupPassword">Heslo</Label>
-                  <Input
-                    id="signupPassword"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              {error && (
-                <Alert variant="destructive" className="mt-4">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              <Button className="w-full mt-4" type="submit" disabled={loading}>
-                {loading ? "Registrácia..." : "Registrovať"}
-              </Button>
-            </form>
-          </TabsContent>
+
           <TabsContent value="employee">
             {isEmployeeRegistered ? (
               <Alert>

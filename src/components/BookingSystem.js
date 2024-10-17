@@ -204,8 +204,9 @@ function BookingSystem({ facilityId }) {
     setIsLoading(true);
     const { data, error } = await supabase
       .from("employees")
-      .select("*, users (id, first_name, last_name), table_number")
-      .eq("facility_id", facilityId);
+      .select("*, users (id, first_name, last_name)")
+      .eq("facility_id", facilityId)
+      .eq("status", "approved"); // Only fetch approved employees
 
     if (error) {
       console.error("Chyba pri načítaní zamestnancov:", error);
