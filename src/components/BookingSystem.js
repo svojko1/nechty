@@ -2,7 +2,19 @@ import React, { useState, useEffect } from "react";
 
 import { useFacility } from "../FacilityContext";
 import FacilitySelector from "./FacilitySelector";
-import { format, parseISO } from "date-fns";
+import { useNavigate } from "react-router-dom";
+
+import {
+  isBefore,
+  isAfter,
+  startOfDay,
+  endOfDay,
+  format,
+  parse,
+  parseISO,
+  isValid,
+} from "date-fns";
+
 import { sk } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./ui/button";
@@ -129,6 +141,7 @@ function BookingSystem({ facilityId }) {
   const [availableEmployees, setAvailableEmployees] = useState({});
   const [selectedRandomEmployee, setSelectedRandomEmployee] = useState(null);
   const { selectedFacility, loading } = useFacility();
+  const navigate = useNavigate();
 
   const debouncedCustomerName = useDebounce(customerName, 500);
   const debouncedEmail = useDebounce(email, 1000);
@@ -356,9 +369,27 @@ function BookingSystem({ facilityId }) {
         selectedEmployeeId = selectedStaff.id;
       }
 
+      // Ensure we have valid date and time
+      const appointmentDate = selectedDate
+        ? new Date(selectedDate)
+        : new Date();
+      const appointmentTime = selectedTime
+        ? parse(selectedTime, "HH:mm", new Date())
+        : new Date();
+
+      if (!isValid(appointmentDate) || !isValid(appointmentTime)) {
+        throw new Error("Invalid date or time selected");
+      }
+
+      // Combine date and time
       const startTime = new Date(
-        `${format(selectedDate, "yyyy-MM-dd")}T${selectedTime}`
+        appointmentDate.getFullYear(),
+        appointmentDate.getMonth(),
+        appointmentDate.getDate(),
+        appointmentTime.getHours(),
+        appointmentTime.getMinutes()
       );
+
       const endTime = new Date(
         startTime.getTime() + selectedService.duration * 60000
       );
@@ -385,6 +416,9 @@ function BookingSystem({ facilityId }) {
 
       setBookingComplete(true);
       toast.success("Rezervácia bola úspešne vytvorená!");
+      setTimeout(() => {
+        navigate("/checkin");
+      }, 5000);
     } catch (error) {
       console.error("Chyba pri vytváraní rezervácie:", error);
       toast.error(
@@ -462,27 +496,60 @@ function BookingSystem({ facilityId }) {
     />
   );
 
-  const renderDateSelection = () => (
-    <div className="flex justify-center">
-      <Calendar
-        mode="single"
-        selected={selectedDate}
-        onSelect={(date) => {
-          setSelectedDate(date);
-          setActiveStep(3);
-        }}
-        className="rounded-md border max-w-full"
-        locale={sk}
-      />
-    </div>
-  );
+  const renderDateSelection = () => {
+    const today = startOfDay(new Date());
+
+    const disabledDates = (date) => {
+      return isBefore(date, today);
+    };
+
+    return (
+      <div className="flex justify-center">
+        <Calendar
+          mode="single"
+          selected={selectedDate}
+          onSelect={(date) => {
+            setSelectedDate(date);
+            setActiveStep(3);
+          }}
+          disabled={disabledDates}
+          className="rounded-md border max-w-full"
+          locale={sk}
+        />
+      </div>
+    );
+  };
 
   const renderTimeSelection = () => {
-    const morningSlots = availableSlots.filter((slot) => slot < "12:00");
-    const afternoonSlots = availableSlots.filter(
-      (slot) => slot >= "12:00" && slot < "17:00"
+    const currentTime = new Date();
+    const currentHour = currentTime.getHours();
+    const currentMinute = currentTime.getMinutes();
+
+    const filterSlots = (slots) => {
+      return slots.filter((slot) => {
+        const [slotHour, slotMinute] = slot.split(":").map(Number);
+        if (selectedDate && isAfter(selectedDate, currentTime)) {
+          return true; // Show all slots for future dates
+        }
+        if (
+          slotHour > currentHour ||
+          (slotHour === currentHour && slotMinute > currentMinute)
+        ) {
+          return true;
+        }
+        return false;
+      });
+    };
+
+    const morningSlots = filterSlots(
+      availableSlots.filter((slot) => slot < "12:00")
     );
-    const eveningSlots = availableSlots.filter((slot) => slot >= "17:00");
+    const afternoonSlots = filterSlots(
+      availableSlots.filter((slot) => slot >= "12:00" && slot < "17:00")
+    );
+    const eveningSlots = filterSlots(
+      availableSlots.filter((slot) => slot >= "17:00")
+    );
 
     const handleTimeSelection = (time) => {
       setSelectedTime(time);
@@ -639,73 +706,91 @@ function BookingSystem({ facilityId }) {
     );
   };
 
-  const ThankYouPage = () => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="text-center"
-    >
-      <div className="mb-8">
-        <motion.div
-          animate={{
-            scale: [1, 1.2, 1],
-            rotate: [0, 10, -10, 0],
-          }}
-          transition={{
-            duration: 1,
-            ease: "easeInOut",
-            times: [0, 0.2, 0.5, 0.8, 1],
-            repeat: Infinity,
-            repeatDelay: 1,
-          }}
-        >
-          <Heart className="w-24 h-24 mx-auto text-pink-500" />
-        </motion.div>
-      </div>
-      <h2 className="text-3xl font-bold text-gray-800 mb-4">
-        Ďakujeme za vašu rezerváciu!
-      </h2>
-      <p className="text-xl text-gray-600 mb-8">
-        {customerName}, tešíme sa na vás{" "}
-        {format(selectedDate, "d. MMMM yyyy", { locale: sk })} o {selectedTime}{" "}
-        v prevádzke {facility.name}.
-      </p>
-      <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
-        <Button
-          onClick={() => {
-            setActiveStep(0);
-            setBookingComplete(false);
-          }}
-          className="w-full sm:w-auto bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white transition-colors text-lg py-4 px-8 rounded-lg shadow-lg"
-        >
-          Rezervovať ďalší termín
-        </Button>
-        <Button
-          onClick={(e) => {
-            e.preventDefault();
-            setTimeout(() => {
-              const appointmentData = {
-                service: selectedService,
-                facility: facility,
-                date: format(selectedDate, "yyyy-MM-dd"),
-                time: selectedTime,
-                staff:
-                  selectedStaff.id === "any"
-                    ? selectedRandomEmployee
-                    : selectedStaff,
-              };
-              downloadICSFile(appointmentData);
-            }, 100);
-          }}
-          className="w-full sm:w-auto bg-white text-pink-600 border border-pink-600 hover:bg-pink-50 transition-colors text-lg py-4 px-8 rounded-lg shadow-lg flex items-center justify-center"
-        >
-          <CalendarIcon className="mr-2" />
-          Pridať do kalendára
-        </Button>
-      </div>
-    </motion.div>
-  );
+  const ThankYouPage = ({
+    customerName,
+    selectedDate,
+    selectedTime,
+    facility,
+  }) => {
+    const formatAppointmentDate = () => {
+      console.log("tu je invalid :" + selectedDate);
+      if (!selectedDate || !isValid(new Date(selectedDate))) {
+        return "Invalid date";
+      }
+      return format(new Date(selectedDate), "d. MMMM yyyy", { locale: sk });
+    };
+
+    const formatAppointmentTime = () => {
+      if (!selectedTime) {
+        return "Invalid time";
+      }
+      try {
+        const timeDate = parseISO(`2000-01-01T${selectedTime}`);
+        if (!isValid(timeDate)) {
+          return "Invalid time";
+        }
+        return format(timeDate, "HH:mm");
+      } catch (error) {
+        console.error("Error formatting time:", error);
+        return "Invalid time";
+      }
+    };
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="text-center"
+      >
+        <div className="mb-8">
+          <motion.div
+            animate={{
+              scale: [1, 1.2, 1],
+              rotate: [0, 10, -10, 0],
+            }}
+            transition={{
+              duration: 1,
+              ease: "easeInOut",
+              times: [0, 0.2, 0.5, 0.8, 1],
+              repeat: Infinity,
+              repeatDelay: 1,
+            }}
+          >
+            <Heart className="w-24 h-24 mx-auto text-pink-500" />
+          </motion.div>
+        </div>
+        <h2 className="text-3xl font-bold text-gray-800 mb-4">
+          Ďakujeme za vašu rezerváciu!
+        </h2>
+        <p className="text-xl text-gray-600 mb-8">
+          {customerName}, tešíme sa na vás {formatAppointmentDate()} o{" "}
+          {formatAppointmentTime()} v prevádzke{" "}
+          {facility?.name || "našej prevádzke"}.
+        </p>
+        <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
+          <Button
+            onClick={() => {
+              // Handle booking another appointment
+            }}
+            className="w-full sm:w-auto bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white transition-colors text-lg py-4 px-8 rounded-lg shadow-lg"
+          >
+            Rezervovať ďalší termín
+          </Button>
+          <Button
+            onClick={(e) => {
+              e.preventDefault();
+              // Handle adding to calendar
+            }}
+            className="w-full sm:w-auto bg-white text-pink-600 border border-pink-600 hover:bg-pink-50 transition-colors text-lg py-4 px-8 rounded-lg shadow-lg flex items-center justify-center"
+          >
+            <CalendarIcon className="mr-2" />
+            Pridať do kalendára
+          </Button>
+        </div>
+      </motion.div>
+    );
+  };
 
   const renderContent = () => {
     switch (activeStep) {
@@ -763,7 +848,16 @@ function BookingSystem({ facilityId }) {
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
             >
-              {bookingComplete ? <ThankYouPage /> : renderContent()}
+              {bookingComplete ? (
+                <ThankYouPage
+                  customerName={customerName}
+                  selectedDate={selectedDate}
+                  selectedTime={selectedTime}
+                  facility={facility}
+                />
+              ) : (
+                renderContent()
+              )}
             </motion.div>
           </AnimatePresence>
 
