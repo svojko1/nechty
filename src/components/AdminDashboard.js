@@ -333,7 +333,6 @@ const AdminDashboard = () => {
       const { error: employeeError } = await supabase
         .from("employees")
         .update({
-          speciality: editingEmployee.speciality,
           table_number: editingEmployee.table_number,
           facility_id: editingEmployee.facility_id,
         })
@@ -689,26 +688,7 @@ const AdminDashboard = () => {
                             required
                           />
                         </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                          <Label
-                            htmlFor="edit_employee_speciality"
-                            className="text-right"
-                          >
-                            Špecializácia
-                          </Label>
-                          <Input
-                            id="edit_employee_speciality"
-                            className="col-span-3"
-                            value={editingEmployee.speciality}
-                            onChange={(e) =>
-                              setEditingEmployee({
-                                ...editingEmployee,
-                                speciality: e.target.value,
-                              })
-                            }
-                            required
-                          />
-                        </div>
+
                         <div className="grid grid-cols-4 items-center gap-4">
                           <Label
                             htmlFor="edit_employee_table_number"
@@ -790,7 +770,7 @@ const AdminDashboard = () => {
                     <TableRow key={employee.id}>
                       <TableCell>{`${employee.users.first_name} ${employee.users.last_name}`}</TableCell>
                       <TableCell>{employee.users.email}</TableCell>
-                      <TableCell>{employee.speciality}</TableCell>
+
                       <TableCell>{employee.table_number}</TableCell>
                       <TableCell>{employee.facilities?.name}</TableCell>
                       <TableCell>{employee.status}</TableCell>

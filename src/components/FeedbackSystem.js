@@ -3,51 +3,97 @@ import { format } from "date-fns";
 import { sk } from "date-fns/locale";
 import { Star, Calendar, Clock, User, CheckCircle } from "lucide-react";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Textarea } from "./ui/textarea";
 import { toast } from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 
+const ThankYouPage = () => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -20 }}
+    transition={{ duration: 0.5 }}
+    className="text-center"
+  >
+    <CheckCircle className="w-24 h-24 mx-auto text-green-500 mb-6" />
+    <h2 className="text-3xl font-bold text-gray-800 mb-4">
+      Ďakujeme za vaše hodnotenie!
+    </h2>
+    <p className="text-xl text-gray-600 mb-8">
+      Vaša spätná väzba nám pomáha zlepšovať naše služby.
+    </p>
+    <p className="text-gray-500">Budete presmerovaný na hlavnú stránku...</p>
+  </motion.div>
+);
+
 const FeedbackPage = () => {
-  const { employeeId } = useParams();
-  const [appointmentDate, setAppointmentDate] = useState("");
-  const [appointmentTime, setAppointmentTime] = useState("");
+  const { appointmentId } = useParams();
+  const navigate = useNavigate();
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [comment, setComment] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [employee, setEmployee] = useState(null);
+  const [appointmentData, setAppointmentData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchEmployeeDetails();
-  }, [employeeId]);
+    fetchAppointmentDetails();
+  }, [appointmentId]);
 
-  const fetchEmployeeDetails = async () => {
+  const fetchAppointmentDetails = async () => {
     try {
       const { data, error } = await supabase
-        .from("employees")
-        .select("*, users(first_name, last_name)")
-        .eq("id", employeeId)
+        .from("appointments")
+        .select(
+          `
+          *,
+          employees (
+            id,
+            users (
+              first_name,
+              last_name
+            )
+          ),
+          services (
+            name
+          )
+        `
+        )
+        .eq("id", appointmentId)
         .single();
 
       if (error) throw error;
-      setEmployee(data);
-    } catch (error) {
-      console.error("Error fetching employee details:", error);
-      toast.error("Failed to fetch employee details");
+
+      if (!data) {
+        setError("Rezervácia nebola nájdená");
+        return;
+      }
+
+      setAppointmentData(data);
+    } catch (err) {
+      console.error("Chyba pri načítaní rezervácie:", err);
+      setError("Nepodarilo sa načítať detaily rezervácie");
+      toast.error("Nepodarilo sa načítať detaily rezervácie");
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (rating === 0) {
+      toast.error("Prosím, vyberte hodnotenie");
+      return;
+    }
+
     try {
-      const { data, error } = await supabase.from("feedback").insert({
-        employee_id: employeeId,
-        appointment_date: `${appointmentDate}T${appointmentTime}:00`,
+      const { error } = await supabase.from("feedback").insert({
+        employee_id: appointmentData.employee_id,
+        appointment_date: appointmentData.start_time,
         rating,
         comment,
       });
@@ -55,44 +101,41 @@ const FeedbackPage = () => {
       if (error) throw error;
 
       setIsSubmitted(true);
-      toast.success("Feedback submitted successfully!");
+      toast.success("Ďakujeme za vaše hodnotenie!");
+
+      setTimeout(() => {
+        navigate("/");
+      }, 3000);
     } catch (error) {
-      console.error("Error submitting feedback:", error);
-      toast.error("Failed to submit feedback");
+      console.error("Chyba pri odosielaní hodnotenia:", error);
+      toast.error("Nepodarilo sa odoslať hodnotenie");
     }
   };
 
-  const resetForm = () => {
-    setAppointmentDate("");
-    setAppointmentTime("");
-    setRating(0);
-    setComment("");
-    setIsSubmitted(false);
-  };
+  if (loading) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardContent className="p-6 text-center">
+          Načítavanie detailov rezervácie...
+        </CardContent>
+      </Card>
+    );
+  }
 
-  const ThankYouPage = () => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.5 }}
-      className="text-center"
-    >
-      <CheckCircle className="w-24 h-24 mx-auto text-green-500 mb-6" />
-      <h2 className="text-3xl font-bold text-gray-800 mb-4">
-        Ďakujeme za vaše hodnotenie!
-      </h2>
-      <p className="text-xl text-gray-600 mb-8">
-        Vaša spätná väzba nám pomáha zlepšovať naše služby.
-      </p>
-      <Button
-        onClick={resetForm}
-        className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white transition-colors"
-      >
-        Odoslať ďalšie hodnotenie
-      </Button>
-    </motion.div>
-  );
+  if (error) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardContent className="p-6 text-center">
+          <p className="text-red-500">{error}</p>
+          <Button onClick={() => navigate("/")} className="mt-4">
+            Späť na hlavnú stránku
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!appointmentData) return null;
 
   return (
     <AnimatePresence mode="wait">
@@ -111,53 +154,39 @@ const FeedbackPage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {employee && (
-                  <div className="mb-4">
-                    <Label className="font-semibold">Zamestnanec</Label>
-                    <p className="text-lg">
-                      {employee.users.first_name} {employee.users.last_name}
-                    </p>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="w-5 h-5 text-pink-500" />
+                    <span>
+                      {format(
+                        new Date(appointmentData.start_time),
+                        "d. MMMM yyyy",
+                        { locale: sk }
+                      )}
+                    </span>
                   </div>
-                )}
-                <div>
-                  <Label htmlFor="appointment-date">Dátum návštevy</Label>
-                  <div className="relative">
-                    <Input
-                      id="appointment-date"
-                      type="date"
-                      value={appointmentDate}
-                      onChange={(e) => setAppointmentDate(e.target.value)}
-                      required
-                      className="pl-10"
-                    />
-                    <Calendar
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                      size={20}
-                    />
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-5 h-5 text-pink-500" />
+                    <span>
+                      {format(new Date(appointmentData.start_time), "HH:mm")}
+                    </span>
                   </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="appointment-time">Čas návštevy</Label>
-                  <div className="relative">
-                    <Input
-                      id="appointment-time"
-                      type="time"
-                      value={appointmentTime}
-                      onChange={(e) => setAppointmentTime(e.target.value)}
-                      required
-                      className="pl-10"
-                    />
-                    <Clock
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                      size={20}
-                    />
+                  <div className="flex items-center space-x-2">
+                    <User className="w-5 h-5 text-pink-500" />
+                    <span>
+                      {appointmentData.employees.users.first_name}{" "}
+                      {appointmentData.employees.users.last_name}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Star className="w-5 h-5 text-pink-500" />
+                    <span>{appointmentData.services.name}</span>
                   </div>
                 </div>
 
                 <div>
-                  <Label>Hodnotenie</Label>
+                  <p className="font-semibold mb-2">Hodnotenie</p>
                   <div className="flex mb-2">
                     {[...Array(5)].map((_, index) => {
                       const ratingValue = index + 1;
@@ -191,19 +220,18 @@ const FeedbackPage = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="comment">Komentár (voliteľné)</Label>
+                  <p className="font-semibold mb-2">Komentár (voliteľné)</p>
                   <Textarea
-                    id="comment"
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
-                    placeholder="Napíšte váš komentár..."
+                    placeholder="Zdieľajte vašu skúsenosť..."
                     className="w-full p-2 border rounded"
                   />
                 </div>
 
                 <Button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white hover:from-pink-600 hover:to-purple-700 transition-colors"
+                  className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white transition-colors"
                 >
                   Odoslať hodnotenie
                 </Button>
@@ -212,15 +240,7 @@ const FeedbackPage = () => {
           </Card>
         </motion.div>
       ) : (
-        <motion.div
-          key="thank-you"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.5 }}
-        >
-          <ThankYouPage />
-        </motion.div>
+        <ThankYouPage />
       )}
     </AnimatePresence>
   );

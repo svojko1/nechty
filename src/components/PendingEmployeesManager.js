@@ -32,7 +32,6 @@ const PendingEmployeesManager = ({ facilities, onEmployeeConfirmed }) => {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedFacility, setSelectedFacility] = useState("");
-  const [speciality, setSpeciality] = useState("");
   const [tableNumber, setTableNumber] = useState("");
 
   useEffect(() => {
@@ -79,7 +78,6 @@ const PendingEmployeesManager = ({ facilities, onEmployeeConfirmed }) => {
           .from("employees")
           .update({
             facility_id: selectedFacility,
-            speciality,
             table_number: tableNumber,
             status: "approved",
           })
@@ -96,7 +94,7 @@ const PendingEmployeesManager = ({ facilities, onEmployeeConfirmed }) => {
           .insert({
             user_id: selectedEmployee.users.id,
             facility_id: selectedFacility,
-            speciality,
+
             table_number: tableNumber,
             status: "approved",
           })
@@ -122,7 +120,7 @@ const PendingEmployeesManager = ({ facilities, onEmployeeConfirmed }) => {
         ...selectedEmployee,
         id: employeeId,
         facility_id: selectedFacility,
-        speciality,
+
         table_number: tableNumber,
         status: "approved",
       });
@@ -190,14 +188,7 @@ const PendingEmployeesManager = ({ facilities, onEmployeeConfirmed }) => {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label htmlFor="speciality">Špecializácia</Label>
-              <Input
-                id="speciality"
-                value={speciality}
-                onChange={(e) => setSpeciality(e.target.value)}
-              />
-            </div>
+            <div></div>
             <div>
               <Label htmlFor="tableNumber">Číslo stola</Label>
               <Input

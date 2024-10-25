@@ -20,8 +20,6 @@ import {
   ArrowRight,
   Maximize2,
   Minimize2,
-  CheckCircle,
-  User,
 } from "lucide-react";
 
 const EnhancedAppointmentTimer = ({ appointment, onAppointmentFinished }) => {
@@ -221,7 +219,13 @@ const EnhancedAppointmentTimer = ({ appointment, onAppointmentFinished }) => {
 
       toast.success("Rezervácia bola úspešne ukončená");
       setIsConfirmationDialogOpen(false);
-      onAppointmentFinished(data);
+      setIsFinishDialogOpen(false); // Also close the price input dialog
+      setPrice(""); // Reset price input
+
+      // Call the callback to refresh parent component
+      if (onAppointmentFinished) {
+        onAppointmentFinished(data[0]);
+      }
     } catch (error) {
       console.error("Chyba pri ukončovaní rezervácie:", error);
       toast.error("Nepodarilo sa ukončiť rezerváciu");

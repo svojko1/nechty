@@ -8,7 +8,6 @@ import {
   isBefore,
   isAfter,
   startOfDay,
-  endOfDay,
   format,
   parse,
   parseISO,
@@ -24,7 +23,6 @@ import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Calendar } from "./ui/calendar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { toast, Toaster } from "react-hot-toast";
 import {
   CalendarIcon,
@@ -35,11 +33,8 @@ import {
   Calendar as CalendarIcon2,
   Heart,
   MapPin,
-  Mail,
-  Phone,
 } from "lucide-react";
 import { supabase } from "../supabaseClient";
-import { downloadICSFile } from "../utils/calendarUtils";
 import useDebounce from "../utils/useDebounce";
 
 const steps = ["Služba", "Zamestnanec", "Dátum", "Čas", "Potvrdenie"];
@@ -77,23 +72,36 @@ const Stepper = ({ currentStep }) => (
   </div>
 );
 
-const SelectionGrid = ({ items, selectedItem, onSelect, renderItem }) => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+const SelectionGrid = ({
+  items,
+  selectedItem,
+  onSelect,
+  renderItem,
+  type = "default",
+}) => (
+  <div
+    className={`grid gap-4 ${
+      // Use different grid layouts based on type
+      type === "employees"
+        ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" // 3 columns for employees
+        : "grid-cols-1 md:grid-cols-2" // 2 columns for services
+    }`}
+  >
     {items.map((item) => (
       <motion.div
         key={item.id}
-        whileHover={{ scale: 1.03 }}
+        whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
       >
         <Card
-          className={`cursor-pointer transition-all ${
+          className={`cursor-pointer transition-all h-full ${
             selectedItem?.id === item.id
-              ? "border-pink-500 bg-pink-50"
-              : "hover:border-pink-300"
+              ? "border-2 border-pink-500 bg-white"
+              : "hover:border-pink-300 bg-white"
           }`}
           onClick={() => onSelect(item)}
         >
-          <CardContent className="p-4 sm:p-6">{renderItem(item)}</CardContent>
+          <CardContent className="p-0">{renderItem(item)}</CardContent>
         </Card>
       </motion.div>
     ))}
@@ -418,7 +426,7 @@ function BookingSystem({ facilityId }) {
       toast.success("Rezervácia bola úspešne vytvorená!");
       setTimeout(() => {
         navigate("/checkin");
-      }, 5000);
+      }, 10000);
     } catch (error) {
       console.error("Chyba pri vytváraní rezervácie:", error);
       toast.error(
@@ -428,72 +436,110 @@ function BookingSystem({ facilityId }) {
   };
 
   const renderServiceSelection = () => (
-    <SelectionGrid
-      items={services}
-      selectedItem={selectedService}
-      onSelect={(service) => {
-        setSelectedService(service);
-        setActiveStep(1);
-      }}
-      renderItem={(service) => (
-        <>
-          <h3 className="text-lg font-semibold mb-2">{service.name}</h3>
-          <div className="flex justify-between items-center">
-            <Badge variant="secondary">{service.duration} min</Badge>
-            <span className="text-xl font-bold text-pink-600">
-              {service.price}€
-            </span>
+    <div className="max-w-3xl mx-auto px-4">
+      {" "}
+      {/* Added padding for mobile */}
+      <SelectionGrid
+        items={services}
+        selectedItem={selectedService}
+        onSelect={(service) => {
+          setSelectedService(service);
+          setActiveStep(1);
+        }}
+        type="services" // Specify type for services
+        renderItem={(service) => (
+          <div className="flex flex-col items-center py-12 px-6">
+            {" "}
+            {/* Adjusted padding */}
+            <h3 className="text-2xl font-semibold mb-8">
+              {" "}
+              {/* Increased title spacing */}
+              {service.name}
+            </h3>
+            <div className="flex flex-col items-center space-y-6">
+              {" "}
+              {/* Increased spacing between elements */}
+              <Badge
+                variant="secondary"
+                className="px-4 py-1.5 text-sm font-medium bg-gray-100"
+              >
+                {" "}
+                {/* Smaller, lighter badge */}
+                30-60 min
+              </Badge>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500 text-sm">od</span>
+                <span className="text-4xl font-bold text-pink-500">
+                  {" "}
+                  {/* Larger price */}
+                  {service.price}
+                </span>
+                <span className="text-4xl font-bold text-pink-500">€</span>{" "}
+                {/* Separate euro symbol */}
+              </div>
+            </div>
           </div>
-        </>
-      )}
-    />
+        )}
+      />
+    </div>
   );
 
   const renderStaffSelection = () => (
-    <SelectionGrid
-      items={[
-        { id: "any", name: "Ktokoľvek", speciality: "", table_number: "" },
-        ...employees,
-      ]}
-      selectedItem={selectedStaff}
-      onSelect={(staff) => {
-        setSelectedStaff(staff);
-        setActiveStep(2);
-      }}
-      renderItem={(staff) => (
-        <div className="flex flex-col items-center h-full">
-          <Avatar className="w-16 h-16 mb-4">
-            {staff.id === "any" ? (
-              <AvatarFallback>ANY</AvatarFallback>
-            ) : (
-              <>
-                <AvatarImage
-                  src={staff.avatar_url}
-                  alt={staff.users.first_name}
-                />
-                <AvatarFallback>
-                  {staff.users.first_name?.[0]}
-                  {staff.users.last_name?.[0]}
-                </AvatarFallback>
-              </>
+    <div className="max-w-3xl mx-auto px-4">
+      <SelectionGrid
+        items={[
+          { id: "any", name: "Ktokoľvek", table_number: "" },
+          ...employees,
+        ]}
+        selectedItem={selectedStaff}
+        onSelect={(staff) => {
+          setSelectedStaff(staff);
+          setActiveStep(2);
+        }}
+        type="employees" // Specify type for employees
+        renderItem={(staff) => (
+          <div className="flex flex-col items-center py-6 px-4">
+            {" "}
+            {/* Reduced padding */}
+            <div className="mb-3">
+              {" "}
+              {/* Reduced margin */}
+              <Avatar className="w-12 h-12">
+                {" "}
+                {/* Smaller avatar */}
+                {staff.id === "any" ? (
+                  <AvatarFallback className="text-sm font-medium bg-gray-100">
+                    ANY
+                  </AvatarFallback>
+                ) : (
+                  <>
+                    <AvatarImage
+                      src={staff.avatar_url}
+                      alt={staff.users?.first_name}
+                    />
+                    <AvatarFallback className="text-sm font-medium bg-gray-100">
+                      {`${staff.users?.first_name?.[0]}${staff.users?.last_name?.[0]}`}
+                    </AvatarFallback>
+                  </>
+                )}
+              </Avatar>
+            </div>
+            <h3 className="text-base font-medium mb-1 text-center">
+              {" "}
+              {/* Smaller text */}
+              {staff.id === "any"
+                ? "Ktokoľvek"
+                : `${staff.users?.first_name} ${staff.users?.last_name}`}
+            </h3>
+            {staff.id !== "any" && staff.table_number && (
+              <p className="text-xs text-gray-500">
+                Stôl: {staff.table_number}
+              </p>
             )}
-          </Avatar>
-          <h3 className="text-lg font-semibold text-center">
-            {staff.id === "any"
-              ? "Ktokoľvek"
-              : `${staff.users.first_name} ${staff.users.last_name}`}
-          </h3>
-          <p className="text-sm text-gray-500 text-center mt-2">
-            {staff.id === "any" ? "\u00A0" : staff.speciality}
-          </p>
-          <p className="text-sm font-medium mt-auto text-center">
-            {staff.id === "any"
-              ? "\u00A0"
-              : `Stôl: ${staff.table_number || "N/A"}`}
-          </p>
-        </div>
-      )}
-    />
+          </div>
+        )}
+      />
+    </div>
   );
 
   const renderDateSelection = () => {
@@ -541,15 +587,7 @@ function BookingSystem({ facilityId }) {
       });
     };
 
-    const morningSlots = filterSlots(
-      availableSlots.filter((slot) => slot < "12:00")
-    );
-    const afternoonSlots = filterSlots(
-      availableSlots.filter((slot) => slot >= "12:00" && slot < "17:00")
-    );
-    const eveningSlots = filterSlots(
-      availableSlots.filter((slot) => slot >= "17:00")
-    );
+    const availableFilteredSlots = filterSlots(availableSlots);
 
     const handleTimeSelection = (time) => {
       setSelectedTime(time);
@@ -565,44 +603,23 @@ function BookingSystem({ facilityId }) {
           <div className="flex justify-center items-center h-32">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
           </div>
-        ) : availableSlots.length > 0 ? (
-          <Tabs defaultValue="morning" className="w-full">
-            <TabsList className="w-full flex">
-              <TabsTrigger value="morning" className="flex-1">
-                Ráno
-              </TabsTrigger>
-              <TabsTrigger value="afternoon" className="flex-1">
-                Poobede
-              </TabsTrigger>
-              <TabsTrigger value="evening" className="flex-1">
-                Večer
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="morning">
-              <TimeSlotGroup
-                title="Ráno"
-                slots={morningSlots}
-                selectedTime={selectedTime}
-                onSelectTime={handleTimeSelection}
-              />
-            </TabsContent>
-            <TabsContent value="afternoon">
-              <TimeSlotGroup
-                title="Poobede"
-                slots={afternoonSlots}
-                selectedTime={selectedTime}
-                onSelectTime={handleTimeSelection}
-              />
-            </TabsContent>
-            <TabsContent value="evening">
-              <TimeSlotGroup
-                title="Večer"
-                slots={eveningSlots}
-                selectedTime={selectedTime}
-                onSelectTime={handleTimeSelection}
-              />
-            </TabsContent>
-          </Tabs>
+        ) : availableFilteredSlots.length > 0 ? (
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+            {availableFilteredSlots.map((time) => (
+              <Button
+                key={time}
+                onClick={() => handleTimeSelection(time)}
+                variant={selectedTime === time ? "default" : "outline"}
+                className={`w-full ${
+                  selectedTime === time
+                    ? "bg-pink-500 text-white"
+                    : "hover:bg-pink-100 hover:text-pink-800"
+                }`}
+              >
+                {time}
+              </Button>
+            ))}
+          </div>
         ) : (
           <div className="text-center py-8">
             <p className="text-gray-600 text-lg">
@@ -663,14 +680,8 @@ function BookingSystem({ facilityId }) {
               <MapPin className="w-5 h-5 text-pink-500" />
               <span>{facility.name}</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <Badge className="bg-purple-500 text-white">
-                {selectedService.duration} min
-              </Badge>
-              <span className="text-xl font-bold text-pink-700">
-                {selectedService.price}€
-              </span>
-            </div>
+
+            <Badge className="bg-purple-500 pt-1 text-white">30-60 min</Badge>
           </div>
         </div>
         <div className="space-y-4 mt-6">
@@ -712,8 +723,19 @@ function BookingSystem({ facilityId }) {
     selectedTime,
     facility,
   }) => {
+    const isKiosk = localStorage.getItem("kiosk-mode") === "true";
+
+    useEffect(() => {
+      // For kiosk mode, redirect to check-in after booking
+      if (isKiosk) {
+        const timer = setTimeout(() => {
+          navigate("/checkin");
+        }, 3000); // Shorter timeout for kiosk mode
+        return () => clearTimeout(timer);
+      }
+    }, []);
+
     const formatAppointmentDate = () => {
-      console.log("tu je invalid :" + selectedDate);
       if (!selectedDate || !isValid(new Date(selectedDate))) {
         return "Invalid date";
       }
@@ -768,26 +790,29 @@ function BookingSystem({ facilityId }) {
           {formatAppointmentTime()} v prevádzke{" "}
           {facility?.name || "našej prevádzke"}.
         </p>
-        <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
-          <Button
-            onClick={() => {
-              // Handle booking another appointment
-            }}
-            className="w-full sm:w-auto bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white transition-colors text-lg py-4 px-8 rounded-lg shadow-lg"
-          >
-            Rezervovať ďalší termín
-          </Button>
-          <Button
-            onClick={(e) => {
-              e.preventDefault();
-              // Handle adding to calendar
-            }}
-            className="w-full sm:w-auto bg-white text-pink-600 border border-pink-600 hover:bg-pink-50 transition-colors text-lg py-4 px-8 rounded-lg shadow-lg flex items-center justify-center"
-          >
-            <CalendarIcon className="mr-2" />
-            Pridať do kalendára
-          </Button>
-        </div>
+
+        {!isKiosk && (
+          <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
+            <Button
+              onClick={() => {
+                // Handle booking another appointment
+              }}
+              className="w-full sm:w-auto bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white transition-colors text-lg py-4 px-8 rounded-lg shadow-lg"
+            >
+              Rezervovať ďalší termín
+            </Button>
+            <Button
+              onClick={(e) => {
+                e.preventDefault();
+                // Handle adding to calendar
+              }}
+              className="w-full sm:w-auto bg-white text-pink-600 border border-pink-600 hover:bg-pink-50 transition-colors text-lg py-4 px-8 rounded-lg shadow-lg flex items-center justify-center"
+            >
+              <CalendarIcon className="mr-2" />
+              Pridať do kalendára
+            </Button>
+          </div>
+        )}
       </motion.div>
     );
   };

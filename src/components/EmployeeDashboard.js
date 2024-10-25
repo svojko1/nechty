@@ -1,15 +1,5 @@
 import React, { useState, useEffect } from "react";
-import {
-  format,
-  parseISO,
-  isAfter,
-  isBefore,
-  addMonths,
-  subMonths,
-  isSameDay,
-  startOfMonth,
-  endOfMonth,
-} from "date-fns";
+import { format, parseISO, addMonths, subMonths, isSameDay } from "date-fns";
 import { sk } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
@@ -34,7 +24,7 @@ import {
 import { Calendar } from "./ui/calendar";
 import { Badge } from "./ui/badge";
 import { Progress } from "./ui/progress";
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+
 import {
   Star,
   DollarSign,
@@ -49,7 +39,6 @@ import {
 } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { toast } from "react-hot-toast";
-import AppointmentTimer from "./AppointmentTimer";
 import EnhancedAppointmentTimer from "./EnhancedAppointmentTimer";
 
 function EmployeeDashboard({ session }) {
@@ -306,6 +295,16 @@ function EmployeeDashboard({ session }) {
     }
   };
 
+  const handleAppointmentFinished = async (updatedAppointment) => {
+    // Refetch all appointments to update the dashboard
+    await fetchAppointments();
+
+    // Also update current appointment if it was the one that was finished
+    if (currentAppointment?.id === updatedAppointment.id) {
+      setCurrentAppointment(null);
+    }
+  };
+
   const handleFinishAppointment = (appointment) => {
     setSelectedAppointment(appointment);
     setPrice(appointment.price ? appointment.price.toString() : "");
@@ -442,7 +441,10 @@ function EmployeeDashboard({ session }) {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
-              <EnhancedAppointmentTimer appointment={currentAppointment} />{" "}
+              <EnhancedAppointmentTimer
+                appointment={currentAppointment}
+                onAppointmentFinished={handleAppointmentFinished}
+              />{" "}
               <div className="mt-4">
                 <p className="font-semibold">
                   Klient:
