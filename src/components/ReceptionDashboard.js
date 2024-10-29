@@ -18,7 +18,6 @@ import {
   TableRow,
 } from "./ui/table";
 import { Input } from "./ui/input";
-
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import {
@@ -53,6 +52,59 @@ const ReceptionDashboard = () => {
   useEffect(() => {
     fetchFacilities();
     fetchAppointments();
+
+    // Subscribe to appointments changes
+    const subscription = supabase
+      .channel("appointment_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "appointments",
+        },
+        async (payload) => {
+          // Fetch the complete appointment data including related information
+          if (payload.eventType === "DELETE") {
+            setAppointments((prev) =>
+              prev.filter((apt) => apt.id !== payload.old.id)
+            );
+          } else {
+            const { data: updatedAppointment, error } = await supabase
+              .from("appointments")
+              .select(
+                `
+                *,
+                services (name),
+                employees (id, table_number, users (first_name, last_name))
+              `
+              )
+              .eq("id", payload.new.id)
+              .single();
+
+            if (!error) {
+              setAppointments((prev) => {
+                const index = prev.findIndex(
+                  (apt) => apt.id === updatedAppointment.id
+                );
+                if (index >= 0) {
+                  const newAppointments = [...prev];
+                  newAppointments[index] = updatedAppointment;
+                  return newAppointments;
+                } else {
+                  return [...prev, updatedAppointment];
+                }
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on component unmount
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -144,7 +196,7 @@ const ReceptionDashboard = () => {
 
       if (error) throw error;
 
-      fetchAppointments();
+      // No need to fetch appointments here as the subscription will handle the update
       toast.success("Appointment marked as paid successfully");
     } catch (error) {
       console.error("Error marking appointment as paid:", error);
@@ -168,6 +220,7 @@ const ReceptionDashboard = () => {
       appointment.employees?.table_number?.toString().includes(searchTerm)
   );
 
+  // Rest of the component's JSX remains the same...
   return (
     <Card className="w-full">
       <EmployeeQueueDisplay className="mb-10" />

@@ -10,32 +10,13 @@ import {
   Link,
   useLocation,
 } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./components/ui/button";
-import {
-  NavigationMenu,
-  NavigationMenuList,
-  NavigationMenuItem,
-} from "./components/ui/navigation-menu";
-import { ScrollArea } from "./components/ui/scroll-area";
 import { cn } from "./lib/utils";
 import { supabase } from "./supabaseClient";
-import {
-  Sparkles,
-  Menu,
-  X,
-  Calendar,
-  Users,
-  BarChart,
-  Star,
-  LogIn,
-  LogOut,
-  UserCheck,
-  Inbox,
-  Settings,
-} from "lucide-react";
+import { toast } from "react-hot-toast";
+import MainNavbar from "./components/MainNavbar";
 
-// Import your components
+// Import components
 import CheckIn from "./components/CheckIn";
 import BookingSystem from "./components/BookingSystem";
 import ManagerDashboard from "./components/ManagerDashboard";
@@ -44,10 +25,12 @@ import FeedbackPage from "./components/FeedbackSystem";
 import AuthForm from "./components/AuthForm";
 import AdminDashboard from "./components/AdminDashboard";
 
-// NavLink component moved inside a separate component that has Router context
-const NavLink = ({ to, children, icon: Icon }) => {
+// NavLink component with active state handling
+const NavLink = ({ to, children, icon: Icon, disabled = false }) => {
   const location = useLocation();
   const isActive = location.pathname === to;
+
+  if (disabled) return null;
 
   return (
     <Link to={to}>
@@ -67,11 +50,10 @@ const NavLink = ({ to, children, icon: Icon }) => {
   );
 };
 
+// Layout component with navigation
 const Layout = ({ session, handleLogout, children }) => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [scrollY, setScrollY] = useState(0);
   const location = useLocation();
-  const isKioskMode =
+  const isKiosk =
     ["/checkin", "/"].includes(location.pathname) &&
     (localStorage.getItem("kiosk-mode") === "true" ||
       location.search.includes("kiosk=true"));
@@ -88,27 +70,8 @@ const Layout = ({ session, handleLogout, children }) => {
     }
   }, [location.search]);
 
-  useEffect(() => {
-    const handleScroll = () => setScrollY(window.scrollY);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth > 768) {
-        setIsMenuOpen(false);
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  const headerClass = scrollY > 50 ? "py-2 shadow-lg" : "py-4";
-
   // If in kiosk mode, render only the main content
-  if (isKioskMode) {
+  if (isKiosk) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-pink-50 to-purple-50 dark:from-gray-900 dark:to-purple-900 flex items-center justify-center">
         <main className="container mx-auto p-4">{children}</main>
@@ -118,149 +81,7 @@ const Layout = ({ session, handleLogout, children }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-pink-50 to-purple-50 dark:from-gray-900 dark:to-purple-900 flex flex-col transition-colors duration-300">
-      <header
-        className={`sticky top-0 z-50 bg-white dark:bg-gray-800 transition-all duration-300 ${headerClass}`}
-      >
-        <nav className="container mx-auto px-4">
-          <div className="flex justify-between items-center">
-            <Link to="/" className="flex items-center space-x-2">
-              <Sparkles className="h-8 w-8 text-pink-500 dark:text-pink-400" />
-              <h1 className="text-2xl font-bold text-pink-800 dark:text-pink-200">
-                Nail Bar
-              </h1>
-            </Link>
-            <div className="hidden md:flex space-x-4 items-center">
-              <NavigationMenu>
-                <NavigationMenuList>
-                  <NavigationMenuItem>
-                    <NavLink to="/" icon={Calendar}>
-                      Rezervácie
-                    </NavLink>
-                  </NavigationMenuItem>
-                  <NavigationMenuItem>
-                    <NavLink to="/checkin" icon={UserCheck}>
-                      Check-in
-                    </NavLink>
-                  </NavigationMenuItem>
-                  <NavigationMenuItem>
-                    <NavLink to="/feedback" icon={Star}>
-                      Hodnotenie
-                    </NavLink>
-                  </NavigationMenuItem>
-
-                  {session ? (
-                    <>
-                      <NavigationMenuItem>
-                        <NavLink to="/zamestnanec" icon={Users}>
-                          Zamestnanec
-                        </NavLink>
-                      </NavigationMenuItem>
-                      <NavigationMenuItem>
-                        <NavLink to="/manazer" icon={BarChart}>
-                          Manažér
-                        </NavLink>
-                      </NavigationMenuItem>
-                      <NavigationMenuItem>
-                        <NavLink to="/reception" icon={Inbox}>
-                          Recepcia
-                        </NavLink>
-                      </NavigationMenuItem>
-                      <NavigationMenuItem>
-                        <NavLink to="/admin" icon={Settings}>
-                          Admin
-                        </NavLink>
-                      </NavigationMenuItem>
-                      <NavigationMenuItem>
-                        <Button onClick={handleLogout} variant="ghost">
-                          <LogOut className="mr-2 h-4 w-4" />
-                          Odhlásiť sa
-                        </Button>
-                      </NavigationMenuItem>
-                    </>
-                  ) : (
-                    <NavigationMenuItem>
-                      <NavLink to="/login" icon={LogIn}>
-                        Prihlásenie
-                      </NavLink>
-                    </NavigationMenuItem>
-                  )}
-                </NavigationMenuList>
-              </NavigationMenu>
-            </div>
-            <Button
-              variant="ghost"
-              className="md:hidden"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-            >
-              {isMenuOpen ? <X /> : <Menu />}
-            </Button>
-          </div>
-        </nav>
-      </header>
-
-      <AnimatePresence>
-        {isMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="md:hidden bg-white dark:bg-gray-800 shadow-md"
-          >
-            <ScrollArea className="h-[300px]">
-              <nav className="container mx-auto px-4 py-4">
-                <ul className="space-y-2">
-                  <li>
-                    <NavLink to="/" icon={Calendar}>
-                      Rezervácie
-                    </NavLink>
-                  </li>
-                  {session ? (
-                    <>
-                      <li>
-                        <NavLink to="/zamestnanec" icon={Users}>
-                          Zamestnanec
-                        </NavLink>
-                      </li>
-                      <li>
-                        <NavLink to="/manazer" icon={BarChart}>
-                          Manažér
-                        </NavLink>
-                      </li>
-                      <li>
-                        <NavLink to="/feedback" icon={Star}>
-                          Hodnotenie
-                        </NavLink>
-                      </li>
-                      <li>
-                        <NavLink to="/admin" icon={Settings}>
-                          Admin
-                        </NavLink>
-                      </li>
-                      <li>
-                        <Button
-                          onClick={handleLogout}
-                          variant="ghost"
-                          className="w-full justify-start"
-                        >
-                          <LogOut className="mr-2 h-4 w-4" />
-                          Odhlásiť sa
-                        </Button>
-                      </li>
-                    </>
-                  ) : (
-                    <li>
-                      <NavLink to="/login" icon={LogIn}>
-                        Prihlásenie
-                      </NavLink>
-                    </li>
-                  )}
-                </ul>
-              </nav>
-            </ScrollArea>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
+      <MainNavbar session={session} handleLogout={handleLogout} />
       <main className="container justify-center items-center mx-auto mt-8 p-4 flex-grow flex">
         {children}
       </main>
@@ -281,10 +102,14 @@ const BookingSystemWrapper = () => {
 function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      if (session) {
+        fetchUserRole(session.user.id);
+      }
       setLoading(false);
     });
 
@@ -292,14 +117,36 @@ function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session) {
+        fetchUserRole(session.user.id);
+      } else {
+        setUserRole(null);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
+  const fetchUserRole = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", userId)
+        .single();
+
+      if (error) throw error;
+      setUserRole(data.role);
+    } catch (error) {
+      console.error("Error fetching user role:", error);
+      toast.error("Failed to fetch user role");
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
+    setUserRole(null);
   };
 
   if (loading) {
@@ -313,28 +160,64 @@ function App() {
   return (
     <FacilityProvider>
       <Router>
-        <Layout session={session} handleLogout={handleLogout}>
+        <Layout
+          session={session}
+          userRole={userRole}
+          handleLogout={handleLogout}
+        >
           <Routes>
-            <Route path="/" element={<BookingSystemWrapper />} />
-            <Route path="/checkin" element={<CheckIn />} />
-            <Route path="/feedback/:appointmentId" element={<FeedbackPage />} />
-            {session ? (
+            {userRole === "reception" ? (
               <>
-                <Route
-                  path="/zamestnanec"
-                  element={<EmployeeDashboard session={session} />}
-                />
-                <Route path="/manazer" element={<ManagerDashboard />} />
                 <Route path="/reception" element={<ReceptionDashboard />} />
-                <Route path="/admin" element={<AdminDashboard />} />
+                <Route
+                  path="*"
+                  element={<Navigate to="/reception" replace />}
+                />
               </>
             ) : (
-              <Route
-                path="/login"
-                element={<AuthForm setSession={setSession} />}
-              />
+              <>
+                <Route path="/" element={<BookingSystemWrapper />} />
+                <Route path="/checkin" element={<CheckIn />} />
+                <Route
+                  path="/feedback/:appointmentId"
+                  element={<FeedbackPage />}
+                />
+                {session && (
+                  <>
+                    {userRole === "employee" && (
+                      <Route
+                        path="/zamestnanec"
+                        element={<EmployeeDashboard session={session} />}
+                      />
+                    )}
+                    {userRole === "manager" && (
+                      <Route path="/manazer" element={<ManagerDashboard />} />
+                    )}
+                    {userRole === "admin" && (
+                      <>
+                        <Route
+                          path="/zamestnanec"
+                          element={<EmployeeDashboard session={session} />}
+                        />
+                        <Route path="/manazer" element={<ManagerDashboard />} />
+                        <Route
+                          path="/reception"
+                          element={<ReceptionDashboard />}
+                        />
+                        <Route path="/admin" element={<AdminDashboard />} />
+                      </>
+                    )}
+                  </>
+                )}
+                {!session && (
+                  <Route
+                    path="/login"
+                    element={<AuthForm setSession={setSession} />}
+                  />
+                )}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </>
             )}
-            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>
       </Router>

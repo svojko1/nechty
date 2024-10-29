@@ -36,6 +36,7 @@ import {
   Clock,
   ArrowUp,
   ArrowDown,
+  Euro,
 } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { toast } from "react-hot-toast";
@@ -224,6 +225,8 @@ function EmployeeDashboard({ session }) {
 
       setEmployeeData(data);
       setIsApproved(data.status === "approved");
+      // Calculate stats after getting employee data
+      await calculateMonthlyStats(data.id);
     } catch (error) {
       console.error("Error fetching employee data:", error);
       toast.error("Failed to fetch employee data. Please try again.");
@@ -343,6 +346,60 @@ function EmployeeDashboard({ session }) {
     }
   };
 
+  const calculateMonthlyStats = async (employeeId) => {
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    try {
+      // Get monthly appointments
+      const { data: monthlyAppointments, error: appointmentsError } =
+        await supabase
+          .from("appointments")
+          .select("*, services(name, price)")
+          .eq("employee_id", employeeId)
+          .gte("start_time", firstDayOfMonth.toISOString())
+          .lte("start_time", lastDayOfMonth.toISOString());
+
+      if (appointmentsError) throw appointmentsError;
+
+      // Get all feedback for this employee
+      const { data: feedbackData, error: feedbackError } = await supabase
+        .from("feedback")
+        .select("rating")
+        .eq("employee_id", employeeId);
+
+      if (feedbackError) throw feedbackError;
+
+      // Calculate average rating
+      const averageRating =
+        feedbackData.length > 0
+          ? (
+              feedbackData.reduce((sum, feedback) => sum + feedback.rating, 0) /
+              feedbackData.length
+            ).toFixed(1)
+          : 0;
+
+      // Calculate monthly earnings from completed appointments
+      const monthlyEarnings = monthlyAppointments
+        .filter((app) => app.status === "completed")
+        .reduce((sum, app) => sum + (app.price || 0), 0);
+
+      // Count total appointments this month
+      const totalAppointments = monthlyAppointments.length;
+
+      setEmployeeStats({
+        monthlyEarnings,
+        totalAppointments,
+        monthlyGoal: 60,
+        rating: Number(averageRating),
+      });
+    } catch (error) {
+      console.error("Error calculating monthly stats:", error);
+      toast.error("Failed to load monthly statistics");
+    }
+  };
+
   const getClientDisplay = (appointment) => {
     return appointment.email || appointment.phone || "N/A";
   };
@@ -354,7 +411,7 @@ function EmployeeDashboard({ session }) {
           <div className="bg-pink-100 p-3 rounded-full">
             <Icon className="h-6 w-6 text-pink-500" />
           </div>
-          {change && (
+          {change !== null && (
             <div
               className={`flex items-center ${
                 changeType === "increase" ? "text-green-500" : "text-red-500"
@@ -466,25 +523,26 @@ function EmployeeDashboard({ session }) {
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
             <StatCard
-              icon={DollarSign}
+              icon={Euro}
               title="Mesačný zárobok"
               value={`${employeeStats.monthlyEarnings.toFixed(2)} €`}
-              change="5.2"
-              changeType="increase"
+              change={null}
             />
             <StatCard
               icon={Star}
               title="Hodnotenie"
-              value={employeeStats.rating}
-              change="0.3"
-              changeType="increase"
+              value={
+                employeeStats.rating > 0
+                  ? `${employeeStats.rating}/5`
+                  : "Bez hodnotenia"
+              }
+              change={null}
             />
             <StatCard
               icon={Users}
               title="Počet rezervácií"
               value={employeeStats.totalAppointments}
-              change="3.1"
-              changeType="increase"
+              change={null}
             />
             <StatCard
               icon={Briefcase}
@@ -493,8 +551,7 @@ function EmployeeDashboard({ session }) {
                 (employeeStats.totalAppointments / employeeStats.monthlyGoal) *
                 100
               ).toFixed(0)}%`}
-              change="2.5"
-              changeType="increase"
+              change={null}
             />
           </div>
 

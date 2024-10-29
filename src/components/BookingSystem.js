@@ -412,7 +412,7 @@ function BookingSystem({ facilityId }) {
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         status: "scheduled",
-        price: selectedService.price,
+        // price: selectedService.price,
       };
 
       const { data, error } = await supabase

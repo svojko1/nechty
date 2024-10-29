@@ -20,9 +20,14 @@ import {
   ArrowRight,
   Maximize2,
   Minimize2,
+  User,
+  CheckCircle,
 } from "lucide-react";
 
-const EnhancedAppointmentTimer = ({ appointment, onAppointmentFinished }) => {
+const EnhancedAppointmentTimer = ({
+  appointment: initialAppointment,
+  onAppointmentFinished,
+}) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [status, setStatus] = useState("waiting");
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -30,13 +35,87 @@ const EnhancedAppointmentTimer = ({ appointment, onAppointmentFinished }) => {
   const [isConfirmationDialogOpen, setIsConfirmationDialogOpen] =
     useState(false);
   const [price, setPrice] = useState("");
+  const [currentAppointment, setCurrentAppointment] =
+    useState(initialAppointment);
+
+  useEffect(() => {
+    // Set up real-time subscription for appointments
+    const subscription = supabase
+      .channel("appointment-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "appointments",
+        },
+        async (payload) => {
+          // If this is a new or updated appointment that should be current
+          if (payload.new && isCurrentAppointment(payload.new)) {
+            const { data: fullAppointment } = await supabase
+              .from("appointments")
+              .select(
+                `
+                *,
+                services (name, duration, price),
+                employees (
+                  id,
+                  users (first_name, last_name)
+                )
+              `
+              )
+              .eq("id", payload.new.id)
+              .single();
+
+            if (fullAppointment) {
+              setCurrentAppointment(fullAppointment);
+              updateStatus(fullAppointment);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Check for current appointment on mount
+    fetchCurrentAppointment();
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const fetchCurrentAppointment = async () => {
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("appointments")
+      .select(
+        `
+        *,
+        services (name, duration, price),
+        employees (
+          id,
+          users (first_name, last_name)
+        )
+      `
+      )
+      .lte("start_time", now)
+      .gte("end_time", now)
+      .limit(1)
+      .single();
+
+    if (data && !error) {
+      setCurrentAppointment(data);
+      updateStatus(data);
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
-      if (appointment) {
+      if (currentAppointment) {
         const now = new Date();
-        const start = new Date(appointment.start_time);
-        const end = new Date(appointment.end_time);
+        const start = new Date(currentAppointment.start_time);
+        const end = new Date(currentAppointment.end_time);
 
         if (isPast(end)) {
           const overtimeSeconds = differenceInSeconds(now, end);
@@ -55,7 +134,32 @@ const EnhancedAppointmentTimer = ({ appointment, onAppointmentFinished }) => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [appointment]);
+  }, [currentAppointment]);
+
+  const isCurrentAppointment = (appointment) => {
+    const now = new Date();
+    const start = new Date(appointment.start_time);
+    const end = new Date(appointment.end_time);
+    return now >= start && now < end;
+  };
+
+  const updateStatus = (appointment) => {
+    const now = new Date();
+    const start = new Date(appointment.start_time);
+    const end = new Date(appointment.end_time);
+
+    if (isPast(end)) {
+      const overtimeSeconds = differenceInSeconds(now, end);
+      setTimeLeft(overtimeSeconds);
+      setStatus(overtimeSeconds > 900 ? "overdue" : "overtime");
+    } else if (isPast(start)) {
+      setTimeLeft(differenceInSeconds(end, now));
+      setStatus("in-progress");
+    } else {
+      setTimeLeft(differenceInSeconds(now, start));
+      setStatus("upcoming");
+    }
+  };
 
   const formatTime = (seconds) => {
     const absSeconds = Math.abs(seconds);
@@ -64,12 +168,13 @@ const EnhancedAppointmentTimer = ({ appointment, onAppointmentFinished }) => {
     const remainingSeconds = absSeconds % 60;
 
     if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${remainingSeconds}s`;
-    } else {
-      return `${remainingSeconds}s`;
+      return `${hours.toString().padStart(2, "0")}:${minutes
+        .toString()
+        .padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`;
     }
+    return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
+      .toString()
+      .padStart(2, "0")}`;
   };
 
   const getStatusColor = () => {
@@ -98,17 +203,17 @@ const EnhancedAppointmentTimer = ({ appointment, onAppointmentFinished }) => {
       case "overdue":
         return "Výrazne prekročený čas";
       case "waiting":
-        return "";
+        return "Čakajte na ďalšieho zákazníka";
       default:
         return "";
     }
   };
 
   const renderTimeInfo = () => {
-    if (!appointment) return null;
+    if (!currentAppointment) return null;
 
-    const start = new Date(appointment.start_time);
-    const end = new Date(appointment.end_time);
+    const start = new Date(currentAppointment.start_time);
+    const end = new Date(currentAppointment.end_time);
     const appointmentDate = isToday(start)
       ? "Dnes"
       : format(start, "dd.MM.yyyy");
@@ -144,27 +249,32 @@ const EnhancedAppointmentTimer = ({ appointment, onAppointmentFinished }) => {
     );
   };
 
+  const formatCustomerName = (fullName) => {
+    if (!fullName) return "";
+    return fullName.split(" ")[0];
+  };
+
   const renderTimer = () => {
-    const timerClasses = isFullscreen
-      ? "text-6xl font-bold"
-      : "text-2xl font-bold";
+    const timerContainerClasses = isFullscreen
+      ? "w-[300px] mx-auto"
+      : "w-[200px] mx-auto";
+
+    const timerClasses = `${
+      isFullscreen ? "text-6xl" : "text-2xl"
+    } font-bold font-mono tabular-nums`;
 
     if (status === "waiting") {
-      return (
-        <div className="text-center mt-2">
-          <p className={timerClasses}>Čakajte na ďalšieho zákaznika</p>
-        </div>
-      );
+      return <div className="text-center mt-2"></div>;
     } else if (status === "upcoming") {
       return (
-        <div className="text-center mt-2">
+        <div className={`text-center mt-2 ${timerContainerClasses}`}>
           <p className="text-sm font-medium">Začína za</p>
           <p className={timerClasses}>{formatTime(timeLeft)}</p>
         </div>
       );
     } else {
       return (
-        <div className="text-center mt-2">
+        <div className={`text-center mt-2 ${timerContainerClasses}`}>
           <p className="text-sm font-medium">
             {status === "in-progress" ? "Zostáva" : "Prekročené o"}
           </p>
@@ -175,19 +285,6 @@ const EnhancedAppointmentTimer = ({ appointment, onAppointmentFinished }) => {
         </div>
       );
     }
-  };
-
-  const toggleFullscreen = () => {
-    if (!isFullscreen) {
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen();
-      }
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
-    }
-    setIsFullscreen(!isFullscreen);
   };
 
   const handleFinishAppointment = () => {
@@ -212,24 +309,34 @@ const EnhancedAppointmentTimer = ({ appointment, onAppointmentFinished }) => {
           price: parseFloat(price),
           end_time: new Date().toISOString(),
         })
-        .eq("id", appointment.id)
+        .eq("id", currentAppointment.id)
         .select();
 
       if (error) throw error;
 
       toast.success("Rezervácia bola úspešne ukončená");
       setIsConfirmationDialogOpen(false);
-      setIsFinishDialogOpen(false); // Also close the price input dialog
-      setPrice(""); // Reset price input
-
-      // Call the callback to refresh parent component
+      setCurrentAppointment(null);
       if (onAppointmentFinished) {
         onAppointmentFinished(data[0]);
       }
     } catch (error) {
-      console.error("Chyba pri ukončovaní rezervácie:", error);
-      toast.error("Nepodarilo sa ukončiť rezerváciu");
+      console.error("Error finishing appointment:", error);
+      toast.error("Failed to finish appointment");
     }
+  };
+
+  const toggleFullscreen = () => {
+    if (!isFullscreen) {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+    setIsFullscreen(!isFullscreen);
   };
 
   return (
@@ -259,15 +366,17 @@ const EnhancedAppointmentTimer = ({ appointment, onAppointmentFinished }) => {
           </div>
           {renderTimeInfo()}
           {renderTimer()}
-          {isFullscreen && appointment && (
-            <div className="mt-4 space-y-4">
+          {currentAppointment && (
+            <div className="mt-4 space-y-4 flex flex-col items-center">
               <p className="text-xl font-semibold">
-                {appointment.services.name}
+                {currentAppointment.services.name}
               </p>
-              <p className="text-lg">{appointment.customer_name}</p>
+              <p className="text-lg">
+                {formatCustomerName(currentAppointment.customer_name)}
+              </p>
               <Button
                 onClick={handleFinishAppointment}
-                className="w-full bg-green-500 hover:bg-green-600 text-white py-4 text-lg rounded-full"
+                className="w-full max-w-xs bg-green-500 hover:bg-green-600 text-white py-4 text-lg rounded-full"
               >
                 Ukončiť rezerváciu
               </Button>

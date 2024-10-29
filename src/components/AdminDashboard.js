@@ -609,7 +609,9 @@ const AdminDashboard = () => {
                               <SelectValue placeholder="Vyberte rolu" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="customer">Zákazník</SelectItem>
+                              <SelectItem value="reception">
+                                Recepcia
+                              </SelectItem>
                               <SelectItem value="employee">
                                 Zamestnanec
                               </SelectItem>

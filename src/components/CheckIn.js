@@ -338,7 +338,7 @@ const CheckIn = () => {
           end_time: appointmentEnd.toISOString(),
           status: "in_progress",
           arrival_time: now.toISOString(), // Since this is a walk-in, arrival time is now
-          price: selectedService.price,
+          // price: selectedService.price,
           notes: "", // Optional field for any additional notes
           created_at: now.toISOString(),
           updated_at: now.toISOString(),
