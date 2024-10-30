@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { toast, Toaster } from "react-hot-toast";
 import { Label } from "./ui/label";
 import { Badge } from "./ui/badge";
+import startOfDay from "date-fns/startOfDay";
 
 import {
   Dialog,
@@ -103,6 +104,9 @@ const CheckIn = () => {
     setSearchResult(null);
 
     try {
+      const now = new Date();
+      const startOfToday = startOfDay(now);
+
       const { data, error } = await supabase
         .from("appointments")
         .select(
@@ -117,8 +121,9 @@ const CheckIn = () => {
         )
         .eq("facility_id", selectedFacility.id)
         .or(`email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`)
-        .order("start_time", { ascending: true })
-        .limit(1);
+        .gte("start_time", startOfToday.toISOString()) // Only show appointments from today
+        .order("start_time", { ascending: true }) // Order by start time ascending
+        .limit(1); // Get only the first (most current) appointment
 
       if (error) throw error;
 
@@ -167,6 +172,17 @@ const CheckIn = () => {
         .single();
 
       if (error) throw error;
+
+      // Update the employee_queue to show the employee is now busy
+      const { error: updateError } = await supabase
+        .from("employee_queue")
+        .update({
+          current_customer_id: data.id,
+          last_assignment_time: now,
+        })
+        .eq("employee_id", data.employee_id);
+
+      if (updateError) throw updateError;
 
       setActiveAppointment({
         ...data,

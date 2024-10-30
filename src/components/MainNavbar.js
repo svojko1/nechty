@@ -9,6 +9,7 @@ import {
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { cn } from "../lib/utils";
+import { supabase } from "../supabaseClient";
 import {
   Sparkles,
   Menu,
@@ -51,6 +52,7 @@ const NavLink = ({ to, children, icon: Icon, onClick = null }) => {
 const MainNavbar = ({ session, handleLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrollY, setScrollY] = useState(0);
+  const [userRole, setUserRole] = useState(null);
   const location = useLocation();
   const isKiosk =
     ["/checkin", "/"].includes(location.pathname) &&
@@ -74,16 +76,39 @@ const MainNavbar = ({ session, handleLogout }) => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Effect to fetch user role from public users table
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      if (session?.user?.id) {
+        try {
+          const { data, error } = await supabase
+            .from("users")
+            .select("role")
+            .eq("id", session.user.id)
+            .single();
+
+          if (error) throw error;
+          setUserRole(data.role);
+        } catch (error) {
+          console.error("Error fetching user role:", error);
+        }
+      } else {
+        setUserRole(null);
+      }
+    };
+
+    fetchUserRole();
+  }, [session]);
+
   // If in kiosk mode, don't render the navbar
   if (isKiosk) return null;
 
-  const headerClass = scrollY > 50 ? "py-2 shadow-lg" : "py-4";
+  const headerClass = scrollY > 50 ? "py-4 shadow-lg" : "py-4";
 
   // Define all possible navigation items
   const publicNavigationItems = [
     { to: "/", label: "Rezervácie", icon: Calendar },
     { to: "/checkin", label: "Check-in", icon: UserCheck },
-    // { to: "/feedback", label: "Hodnotenie", icon: Star },
   ];
 
   // Function to get navigation items based on user role
@@ -91,8 +116,6 @@ const MainNavbar = ({ session, handleLogout }) => {
     if (!session) {
       return publicNavigationItems;
     }
-
-    const userRole = session.user?.role;
 
     switch (userRole) {
       case "employee":
@@ -106,6 +129,11 @@ const MainNavbar = ({ session, handleLogout }) => {
           { to: "/manazer", label: "Manažér", icon: BarChart },
           { to: "/reception", label: "Recepcia", icon: Inbox },
           { to: "/admin", label: "Admin", icon: Settings },
+        ];
+      case "manager":
+        return [
+          ...publicNavigationItems,
+          { to: "/manazer", label: "Manažér", icon: BarChart },
         ];
       default:
         return publicNavigationItems;
@@ -144,10 +172,15 @@ const MainNavbar = ({ session, handleLogout }) => {
                 {/* Login/Logout button - always show */}
                 <NavigationMenuItem>
                   {session ? (
-                    <Button onClick={handleLogout} variant="ghost">
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Odhlásiť sa
-                    </Button>
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-gray-600">
+                        {session.user.email}
+                      </span>
+                      <Button onClick={handleLogout} variant="ghost">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Odhlásiť sa
+                      </Button>
+                    </div>
                   ) : (
                     <NavLink to="/login" icon={LogIn}>
                       Prihlásenie
@@ -197,17 +230,24 @@ const MainNavbar = ({ session, handleLogout }) => {
                   {/* Login/Logout button - always show */}
                   <li>
                     {session ? (
-                      <Button
-                        onClick={() => {
-                          handleLogout();
-                          setIsMenuOpen(false);
-                        }}
-                        variant="ghost"
-                        className="w-full justify-start"
-                      >
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Odhlásiť sa
-                      </Button>
+                      <>
+                        <li className="px-4 py-2 text-sm text-gray-600">
+                          {session.user.email}
+                        </li>
+                        <li>
+                          <Button
+                            onClick={() => {
+                              handleLogout();
+                              setIsMenuOpen(false);
+                            }}
+                            variant="ghost"
+                            className="w-full justify-start"
+                          >
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Odhlásiť sa
+                          </Button>
+                        </li>
+                      </>
                     ) : (
                       <NavLink
                         to="/login"

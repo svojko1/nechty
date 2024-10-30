@@ -324,25 +324,115 @@ function EmployeeDashboard({ session }) {
   };
 
   const handleConfirmFinish = async () => {
+    console.log("Finishing appointment");
+
     try {
-      const { data, error } = await supabase
-        .from("appointments")
-        .update({
-          status: "completed",
-          price: parseFloat(price),
-          end_time: new Date().toISOString(),
-        })
-        .eq("id", selectedAppointment.id)
-        .select();
+      // First, complete the current appointment
+      const { data: completedAppointment, error: completionError } =
+        await supabase
+          .from("appointments")
+          .update({
+            status: "completed",
+            price: parseFloat(price),
+            end_time: new Date().toISOString(),
+          })
+          .eq("id", selectedAppointment.id)
+          .select()
+          .single();
 
-      if (error) throw error;
+      if (completionError) throw completionError;
 
-      toast.success("Appointment finished successfully");
+      // Check for waiting customers in the same facility
+      const { data: nextCustomer, error: queueError } = await supabase
+        .from("customer_queue")
+        .select(
+          `
+          *,
+          services (id, name, duration)
+        `
+        )
+        .eq("facility_id", employeeData.facility_id)
+        .eq("status", "waiting")
+        .order("queue_position", { ascending: true })
+        .limit(1)
+        .single();
+
+      if (queueError && queueError.code !== "PGRST116") throw queueError;
+
+      if (nextCustomer) {
+        // Create new appointment for the waiting customer
+        const now = new Date();
+        const appointmentEnd = new Date(
+          now.getTime() + nextCustomer.services.duration * 60 * 1000
+        );
+
+        const { data: newAppointment, error: appointmentError } = await supabase
+          .from("appointments")
+          .insert({
+            customer_name: nextCustomer.customer_name,
+            email: nextCustomer.contact_info.includes("@")
+              ? nextCustomer.contact_info
+              : null,
+            phone: !nextCustomer.contact_info.includes("@")
+              ? nextCustomer.contact_info
+              : null,
+            service_id: nextCustomer.service_id,
+            employee_id: employeeData.id,
+            facility_id: employeeData.facility_id,
+            start_time: now.toISOString(),
+            end_time: appointmentEnd.toISOString(),
+            status: "in_progress",
+            arrival_time: now.toISOString(),
+            created_at: now.toISOString(),
+            updated_at: now.toISOString(),
+          })
+          .select()
+          .single();
+
+        if (appointmentError) throw appointmentError;
+
+        // Remove customer from queue
+        const { error: removeError } = await supabase
+          .from("customer_queue")
+          .delete()
+          .eq("id", nextCustomer.id);
+
+        if (removeError) throw removeError;
+
+        // Update employee queue status
+        const { error: employeeQueueError } = await supabase
+          .from("employee_queue")
+          .update({
+            current_customer_id: newAppointment.id,
+            last_assignment_time: now.toISOString(),
+          })
+          .eq("employee_id", employeeData.id);
+
+        if (employeeQueueError) throw employeeQueueError;
+
+        toast.success(
+          "Appointment completed and new customer automatically assigned!"
+        );
+      } else {
+        // No waiting customers, just update employee queue status
+        const { error: employeeQueueError } = await supabase
+          .from("employee_queue")
+          .update({
+            current_customer_id: null,
+            last_assignment_time: new Date().toISOString(),
+          })
+          .eq("employee_id", employeeData.id);
+
+        if (employeeQueueError) throw employeeQueueError;
+
+        toast.success("Appointment completed successfully!");
+      }
+
       setIsConfirmationDialogOpen(false);
       fetchAppointments();
     } catch (error) {
-      console.error("Error finishing appointment:", error);
-      toast.error("Failed to finish appointment");
+      console.error("Error handling appointment completion:", error);
+      toast.error("Failed to complete appointment");
     }
   };
 
