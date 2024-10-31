@@ -73,6 +73,29 @@ function EmployeeDashboard({ session }) {
         fetchEmployeeData();
       }
       fetchAppointments();
+
+      // Set up real-time subscription
+      const appointmentSubscription = supabase
+        .channel("employee-appointments")
+        .on(
+          "postgres_changes",
+          {
+            event: "*", // Listen to all events (INSERT, UPDATE, DELETE)
+            schema: "public",
+            table: "appointments",
+            // We'll filter by employee_id in the fetchAppointments function
+          },
+          (payload) => {
+            console.log("Appointment change detected:", payload);
+            fetchAppointments(); // Refresh appointments when any change occurs
+          }
+        )
+        .subscribe();
+
+      // Cleanup subscription
+      return () => {
+        supabase.removeChannel(appointmentSubscription);
+      };
     } else {
       console.log("No session, skipping data fetch");
     }
@@ -276,20 +299,8 @@ function EmployeeDashboard({ session }) {
 
       if (error) throw error;
 
-      //       const testAppointment = {
-      //   id: 'test-appointment',
-      //   start_time: new Date(now.getTime() - 5 * 60000).toISOString(), // 5 minutes ago
-      //   end_time: new Date(now.getTime() + 55 * 60000).toISOString(), // 55 minutes from now
-      //   services: { name: 'Test Service' },
-      //   customer_name: 'Test Customer',
-      //   email: 'test@example.com',
-      //   phone: '1234567890'
-      // };
-
-      // setAppointments([testAppointment, ...data]);
-      // updateCurrentAppointment([testAppointment, ...data]);
       setAppointments(data);
-      updateCurrentAppointment(data); // Pass the fetched data here
+      updateCurrentAppointment(data);
     } catch (error) {
       console.error("Error fetching appointments:", error);
       toast.error(`Failed to fetch appointments: ${error.message}`);
@@ -601,6 +612,68 @@ function EmployeeDashboard({ session }) {
             </CardContent>
           </Card>
 
+          <Card className="mt-6 mb-6  bg-white shadow-xl rounded-lg overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
+              <CardTitle className="text-2xl font-bold flex items-center">
+                <Clock className="mr-2" />
+                Nadchádzajúce rezervácie
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              {isLoading ? (
+                <p className="text-center text-gray-500">
+                  Načítavam rezervácie...
+                </p>
+              ) : appointments.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Dátum</TableHead>
+                      <TableHead>Čas</TableHead>
+                      <TableHead>Klient</TableHead>
+                      <TableHead>Služba</TableHead>
+                      <TableHead>Stav</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {appointments.slice(0, 5).map((appointment) => (
+                      <TableRow key={appointment.id}>
+                        <TableCell>
+                          {format(
+                            parseISO(appointment.start_time),
+                            "dd.MM.yyyy"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {format(parseISO(appointment.start_time), "HH:mm")}
+                        </TableCell>
+                        <TableCell>{getClientDisplay(appointment)}</TableCell>
+                        <TableCell>{appointment?.services?.name}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              appointment.status === "completed"
+                                ? "success"
+                                : "default"
+                            }
+                          >
+                            {appointment.status === "completed"
+                              ? "Completed"
+                              : "Scheduled"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-center text-gray-500">
+                  Žiadne nadchádzajúce rezervácie.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
             <StatCard
               icon={Euro}
@@ -799,68 +872,6 @@ function EmployeeDashboard({ session }) {
               </CardContent>
             </Card>
           </div>
-
-          <Card className="mt-6 bg-white shadow-xl rounded-lg overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-              <CardTitle className="text-2xl font-bold flex items-center">
-                <Clock className="mr-2" />
-                Nadchádzajúce rezervácie
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              {isLoading ? (
-                <p className="text-center text-gray-500">
-                  Načítavam rezervácie...
-                </p>
-              ) : appointments.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Dátum</TableHead>
-                      <TableHead>Čas</TableHead>
-                      <TableHead>Klient</TableHead>
-                      <TableHead>Služba</TableHead>
-                      <TableHead>Stav</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {appointments.slice(0, 5).map((appointment) => (
-                      <TableRow key={appointment.id}>
-                        <TableCell>
-                          {format(
-                            parseISO(appointment.start_time),
-                            "dd.MM.yyyy"
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {format(parseISO(appointment.start_time), "HH:mm")}
-                        </TableCell>
-                        <TableCell>{getClientDisplay(appointment)}</TableCell>
-                        <TableCell>{appointment?.services?.name}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              appointment.status === "completed"
-                                ? "success"
-                                : "default"
-                            }
-                          >
-                            {appointment.status === "completed"
-                              ? "Completed"
-                              : "Scheduled"}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <p className="text-center text-gray-500">
-                  Žiadne nadchádzajúce rezervácie.
-                </p>
-              )}
-            </CardContent>
-          </Card>
 
           <Dialog
             open={isFinishDialogOpen}
