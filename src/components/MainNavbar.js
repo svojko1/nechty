@@ -172,7 +172,7 @@ const MainNavbar = ({ session, handleLogout }) => {
                 {/* Login/Logout button - always show */}
                 <NavigationMenuItem>
                   {session ? (
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 pl-4">
                       <span className="text-sm text-gray-600">
                         {session.user.email}
                       </span>

@@ -253,6 +253,17 @@ function App() {
                     element={<Navigate to="/reception" replace />}
                   />
                 </>
+              ) : userRole === "employee" ? (
+                <>
+                  <Route
+                    path="/zamestnanec"
+                    element={<EmployeeDashboard session={session} />}
+                  />
+                  <Route
+                    path="*"
+                    element={<Navigate to="/zamestnanec" replace />}
+                  />
+                </>
               ) : (
                 <>
                   <Route path="/" element={<BookingSystemWrapper />} />

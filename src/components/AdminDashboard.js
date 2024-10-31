@@ -89,8 +89,8 @@ const AdminDashboard = () => {
     first_name: "",
     last_name: "",
     role: "customer",
+    facility_id: "",
   });
-
   useEffect(() => {
     fetchUsers();
     fetchEmployees();
@@ -215,6 +215,12 @@ const AdminDashboard = () => {
     e.preventDefault();
     setLoading(true);
     try {
+      // Validate facility selection for reception role
+      if (newUser.role === "reception" && !newUser.facility_id) {
+        toast.error("Prosím, vyberte zariadenie pre recepciu");
+        return;
+      }
+
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newUser.email,
         password: newUser.password,
@@ -229,26 +235,39 @@ const AdminDashboard = () => {
 
       if (authError) throw authError;
 
-      const { error: userError } = await supabase.from("users").insert({
+      // Prepare user data
+      const userData = {
         id: authData.user.id,
         email: newUser.email,
         first_name: newUser.first_name,
         last_name: newUser.last_name,
         role: newUser.role,
-      });
+      };
+
+      // Add facility_id only for reception role
+      if (newUser.role === "reception") {
+        userData.facility_id = newUser.facility_id;
+      }
+
+      // Insert into users table
+      const { error: userError } = await supabase
+        .from("users")
+        .insert([userData]);
 
       if (userError) throw userError;
 
-      toast.success("Používateľ bol úspešne pridaný");
-      setIsAddUserDialogOpen(false);
-      fetchUsers();
+      // Rest of the function remains the same...
+
       setNewUser({
         email: "",
         password: "",
         first_name: "",
         last_name: "",
         role: "customer",
+        facility_id: "", // Clear facility_id as well
       });
+
+      // Rest of the success handling...
     } catch (error) {
       console.error("Chyba pri pridávaní používateľa:", error);
       toast.error(error.message || "Nepodarilo sa pridať používateľa");
@@ -620,6 +639,35 @@ const AdminDashboard = () => {
                             </SelectContent>
                           </Select>
                         </div>
+
+                        {/* Show facility selection only for reception role */}
+                        {newUser.role === "reception" && (
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="facility" className="text-right">
+                              Zariadenie
+                            </Label>
+                            <Select
+                              value={newUser.facility_id}
+                              onValueChange={(value) =>
+                                setNewUser({ ...newUser, facility_id: value })
+                              }
+                            >
+                              <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Vyberte zariadenie" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {facilities.map((facility) => (
+                                  <SelectItem
+                                    key={facility.id}
+                                    value={facility.id}
+                                  >
+                                    {facility.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                       </div>
                       <DialogFooter>
                         <Button type="submit" disabled={loading}>

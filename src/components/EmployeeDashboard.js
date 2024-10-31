@@ -568,17 +568,7 @@ function EmployeeDashboard({ session }) {
           <h1 className="text-3xl font-bold text-gray-800 mb-6">
             Dashboard zamestnanca
           </h1>
-
-          <Card className="mt-6 bg-white shadow-xl rounded-lg overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
-              <CardTitle className="text-2xl font-bold flex items-center">
-                Employee Queue Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              {renderCheckInOutButton()}
-            </CardContent>
-          </Card>
+          <div className="mb-4">{renderCheckInOutButton()}</div>
 
           <Card className="mb-6 bg-white shadow-xl rounded-lg overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">

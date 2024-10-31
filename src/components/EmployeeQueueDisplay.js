@@ -14,7 +14,8 @@ import { Progress } from "./ui/progress";
 import { format, startOfDay, endOfDay } from "date-fns";
 import { sk } from "date-fns/locale";
 
-const EmployeeQueueDisplay = () => {
+// Add facilityId prop
+const EmployeeQueueDisplay = ({ facilityId }) => {
   const [queueData, setQueueData] = useState([]);
   const [employeeStats, setEmployeeStats] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -25,17 +26,63 @@ const EmployeeQueueDisplay = () => {
   });
 
   useEffect(() => {
-    fetchQueueData();
-    fetchDailyStats();
-  }, []);
+    // Only fetch data if facilityId is provided
+    if (facilityId) {
+      fetchQueueData();
+      fetchDailyStats();
+
+      // Add these subscriptions
+      const employeeQueueSubscription = supabase
+        .channel("employee-queue-changes")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "employee_queue",
+            filter: `facility_id=eq.${facilityId}`, // Add facility filter
+          },
+          () => {
+            fetchQueueData();
+            fetchDailyStats();
+          }
+        )
+        .subscribe();
+
+      const appointmentsSubscription = supabase
+        .channel("appointments-changes")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "appointments",
+            filter: `facility_id=eq.${facilityId}`, // Add facility filter
+          },
+          () => {
+            fetchQueueData();
+            fetchDailyStats();
+          }
+        )
+        .subscribe();
+
+      // Cleanup subscriptions
+      return () => {
+        supabase.removeChannel(employeeQueueSubscription);
+        supabase.removeChannel(appointmentsSubscription);
+      };
+    }
+  }, [facilityId]);
 
   const fetchDailyStats = async () => {
+    if (!facilityId) return;
+
     try {
       const today = new Date();
       const startOfToday = startOfDay(today).toISOString();
       const endOfToday = endOfDay(today).toISOString();
 
-      // Get all employees who worked today
+      // Get all employees who worked today for this facility
       const { data: activeEmployees, error: employeeError } = await supabase
         .from("employee_queue")
         .select(
@@ -52,6 +99,7 @@ const EmployeeQueueDisplay = () => {
         `
         )
         .eq("is_active", true)
+        .eq("facility_id", facilityId) // Add facility filter
         .gte("check_in_time", startOfToday)
         .lte("check_in_time", endOfToday);
 
@@ -69,6 +117,7 @@ const EmployeeQueueDisplay = () => {
           services (name)
         `
         )
+        .eq("facility_id", facilityId) // Add facility filter
         .gte("start_time", startOfToday)
         .lte("end_time", endOfToday);
 
@@ -104,7 +153,6 @@ const EmployeeQueueDisplay = () => {
         0
       );
 
-      // Calculate percentages and prepare final stats
       const employeeStatsList = Object.values(employeeStatsMap).map((emp) => ({
         ...emp,
         revenuePercentage:
@@ -127,9 +175,10 @@ const EmployeeQueueDisplay = () => {
   };
 
   const fetchQueueData = async () => {
+    if (!facilityId) return;
+
     setIsLoading(true);
     try {
-      // Fetch employee queue data
       const { data: queueData, error: queueError } = await supabase
         .from("employee_queue")
         .select(
@@ -143,6 +192,7 @@ const EmployeeQueueDisplay = () => {
           )
         `
         )
+        .eq("facility_id", facilityId) // Add facility filter
         .eq("is_active", true)
         .order("position_in_queue", { ascending: true });
 
@@ -156,6 +206,7 @@ const EmployeeQueueDisplay = () => {
           .from("appointments")
           .select("*")
           .in("employee_id", employeeIds)
+          .eq("facility_id", facilityId) // Add facility filter
           .lte("start_time", now)
           .gte("end_time", now);
 
@@ -176,6 +227,10 @@ const EmployeeQueueDisplay = () => {
       setIsLoading(false);
     }
   };
+
+  if (!facilityId) {
+    return null; // Or return a message that facility ID is required
+  }
 
   return (
     <Card className="w-full">
@@ -212,55 +267,12 @@ const EmployeeQueueDisplay = () => {
           </div>
         </div>
 
-        {/* Employee Performance Table */}
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold mb-4">
-            Výkon zamestnancov dnes
-          </h3>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Zamestnanec</TableHead>
-                <TableHead>Stôl</TableHead>
-                <TableHead>Počet zákazníkov</TableHead>
-                <TableHead>Dokončené</TableHead>
-                <TableHead>Tržby</TableHead>
-                <TableHead>Podiel na tržbách</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {employeeStats.map((employee) => (
-                <TableRow key={employee.id}>
-                  <TableCell className="font-medium">{employee.name}</TableCell>
-                  <TableCell>{employee.tableNumber}</TableCell>
-                  <TableCell>{employee.totalAppointments}</TableCell>
-                  <TableCell>{employee.completedAppointments}</TableCell>
-                  <TableCell className="font-semibold">
-                    {employee.revenue.toFixed(2)} €
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Progress
-                        value={employee.revenuePercentage}
-                        className="w-20"
-                      />
-                      <span className="text-sm">
-                        {employee.revenuePercentage.toFixed(1)}%
-                      </span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Existing Queue Table */}
-        {/* Existing Queue Table */}
         <div className="mt-8">
           <h3 className="text-lg font-semibold mb-4">Aktuálne poradie</h3>
           {isLoading ? (
-            <p className="text-center text-gray-500">Načítavam údaje...</p>
+            <div className="flex justify-center items-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
+            </div>
           ) : (
             <Table>
               <TableHeader>
