@@ -11,12 +11,37 @@ export const FacilityProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedFacilityId = localStorage.getItem("selectedFacilityId");
-    if (storedFacilityId) {
-      fetchFacility(storedFacilityId);
-    } else {
-      fetchFacilities();
-    }
+    const initializeFacility = async () => {
+      // Get URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const pobockaParam = urlParams.get("pobocka");
+
+      // Check URL parameter first
+      if (pobockaParam) {
+        const { data: facilityData, error } = await supabase
+          .from("facilities")
+          .select("*")
+          .ilike("name", `%${pobockaParam}%`)
+          .single();
+
+        if (!error && facilityData) {
+          setSelectedFacility(facilityData);
+          localStorage.setItem("selectedFacilityId", facilityData.id);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // If no URL parameter or facility not found, check localStorage
+      const storedFacilityId = localStorage.getItem("selectedFacilityId");
+      if (storedFacilityId) {
+        await fetchFacility(storedFacilityId);
+      } else {
+        await fetchFacilities();
+      }
+    };
+
+    initializeFacility();
   }, []);
 
   const fetchFacility = async (facilityId) => {
@@ -40,7 +65,10 @@ export const FacilityProvider = ({ children }) => {
 
   const fetchFacilities = async () => {
     try {
-      const { data, error } = await supabase.from("facilities").select("*");
+      const { data, error } = await supabase
+        .from("facilities")
+        .select("*")
+        .order("name", { ascending: true });
 
       if (error) throw error;
       setFacilities(data);
@@ -54,11 +82,19 @@ export const FacilityProvider = ({ children }) => {
   const selectFacility = (facility) => {
     setSelectedFacility(facility);
     localStorage.setItem("selectedFacilityId", facility.id);
+    // Update URL without triggering reload
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.set("pobocka", facility.name.toLowerCase());
+    window.history.pushState({}, "", newUrl);
   };
 
   const resetFacility = () => {
     setSelectedFacility(null);
     localStorage.removeItem("selectedFacilityId");
+    // Remove pobocka parameter from URL
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.delete("pobocka");
+    window.history.pushState({}, "", newUrl);
     fetchFacilities();
   };
 

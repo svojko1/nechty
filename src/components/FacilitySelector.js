@@ -9,10 +9,16 @@ import {
 import { Button } from "./ui/button";
 import { useFacility } from "../FacilityContext";
 import { useNavigate, useLocation } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 
 const FacilitySelector = () => {
-  const { facilities, selectFacility, selectedFacility, resetFacility } =
-    useFacility();
+  const {
+    facilities,
+    selectFacility,
+    selectedFacility,
+    resetFacility,
+    loading,
+  } = useFacility();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -25,28 +31,43 @@ const FacilitySelector = () => {
 
   const handleSelectFacility = (facility) => {
     selectFacility(facility);
-    localStorage.setItem("selectedFacility", JSON.stringify(facility));
   };
 
-  const handleResetFacility = () => {
-    resetFacility();
-    localStorage.removeItem("selectedFacility");
-  };
+  if (loading) {
+    return (
+      <Card className="w-full max-w-md mx-auto mt-8">
+        <CardContent className="flex justify-center items-center min-h-[200px]">
+          <Loader2 className="h-8 w-8 animate-spin text-pink-500" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (selectedFacility) {
     return (
       <Card className="w-full max-w-md mx-auto mt-8">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-center">
-            Current Facility
+            Aktuálna pobočka
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-center text-lg">{selectedFacility.name}</p>
+          <p className="text-center text-lg font-medium text-gray-700">
+            {selectedFacility.name}
+          </p>
+          {selectedFacility.address && (
+            <p className="text-center text-sm text-gray-500 mt-2">
+              {selectedFacility.address}
+            </p>
+          )}
         </CardContent>
         <CardFooter className="flex justify-center">
-          <Button onClick={handleResetFacility} variant="outline">
-            Change Facility
+          <Button
+            onClick={resetFacility}
+            variant="outline"
+            className="hover:bg-pink-50"
+          >
+            Zmeniť pobočku
           </Button>
         </CardFooter>
       </Card>
@@ -65,9 +86,15 @@ const FacilitySelector = () => {
           <Button
             key={facility.id}
             onClick={() => handleSelectFacility(facility)}
-            className="w-full"
+            className="w-full h-14 hover:bg-pink-600 transition-colors"
+            variant="default"
           >
-            {facility.name}
+            <div className="flex flex-col items-center w-full">
+              <span className="text-lg">{facility.name}</span>
+              {facility.address && (
+                <span className="text-sm opacity-90">{facility.address}</span>
+              )}
+            </div>
           </Button>
         ))}
       </CardContent>
