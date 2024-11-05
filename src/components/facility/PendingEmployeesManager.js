@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { supabase } from "../supabaseClient";
+
+import { supabase } from "src/supabaseClient";
 import { toast } from "react-hot-toast";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+
+// UI Components
+import { Button } from "src/components/ui/button";
+import { Input } from "src/components/ui/input";
+import { Label } from "src/components/ui/label";
 import {
   Table,
   TableBody,
@@ -11,21 +14,21 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "./ui/table";
+} from "src/components/ui/table";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "./ui/dialog";
+} from "src/components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "./ui/select";
+} from "src/components/ui/select";
 
 const PendingEmployeesManager = ({ facilities, onEmployeeConfirmed }) => {
   const [pendingEmployees, setPendingEmployees] = useState([]);

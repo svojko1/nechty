@@ -1,10 +1,22 @@
 import React, { useState, useEffect } from "react";
+
 import { format, differenceInSeconds, isPast, isToday } from "date-fns";
-import { sk } from "date-fns/locale";
-import { Card, CardContent } from "./ui/card";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
+import { toast } from "react-hot-toast";
+import { supabase } from "src/supabaseClient";
+import {
+  Clock,
+  Calendar,
+  ArrowRight,
+  Maximize2,
+  Minimize2,
+  UserCheck,
+} from "lucide-react";
+
+// UI Components
+import { Card, CardContent } from "src/components/ui/card";
+import { Badge } from "src/components/ui/badge";
+import { Button } from "src/components/ui/button";
+import { Input } from "src/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -12,17 +24,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./ui/dialog";
-import { toast } from "react-hot-toast";
-import { supabase } from "../supabaseClient";
-import {
-  Clock,
-  Calendar,
-  ArrowRight,
-  Maximize2,
-  Minimize2,
-  User,
-} from "lucide-react";
+} from "src/components/ui/dialog";
+
+// Functional Components
+import { finishCustomerAppointment } from "src/utils/employeeAvailability";
+import { acceptCustomerCheckIn } from "src/utils/employeeAvailability";
 
 // Constants
 const APPOINTMENT_STATUS = {
@@ -33,8 +39,60 @@ const APPOINTMENT_STATUS = {
   OVERDUE: "overdue",
 };
 
+const NextAppointmentCard = ({ appointment }) => {
+  if (!appointment) return null;
+
+  return (
+    <div className="mt-6">
+      <div className="text-blue-600 text-sm font-medium mb-2">
+        Nasledujúca rezervácia
+      </div>
+      <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
+        <div className="flex items-center justify-center mb-1">
+          <span className="text-gray-600 text-sm">
+            {format(new Date(appointment.start_time), "HH:mm")}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 ">
+            <h4 className="font-medium text-gray-900">
+              {appointment.services?.name}
+            </h4>
+            <p className="text-gray-500 text-sm">{appointment.customer_name}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const UpcomingAppointmentCard = ({ appointment }) => {
+  if (!appointment) return null;
+
+  return (
+    <div className="mt-4 p-4 bg-pink-50 rounded-lg border border-pink-100">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-sm font-medium text-pink-700">
+          Nadchádzajúca rezervácia
+        </h4>
+        <Badge variant="outline" className="bg-pink-100">
+          {format(new Date(appointment.start_time), "HH:mm")}
+        </Badge>
+      </div>
+      <div className="space-y-2">
+        <p className="text-pink-800 font-medium">{appointment.customer_name}</p>
+        <div className="flex items-center text-sm text-pink-600">
+          <Clock className="w-4 h-4 mr-1" />
+          <span>{appointment.services?.name}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const EnhancedAppointmentTimer = ({
   appointment: initialAppointment,
+  nextAppointment,
   onAppointmentFinished,
 }) => {
   // State management
@@ -111,41 +169,6 @@ const EnhancedAppointmentTimer = ({
     return () => clearInterval(timer);
   }, [currentAppointment]);
 
-  // Subscription setup functions
-  const setupAppointmentSubscription = () => {
-    return supabase
-      .channel("realtime-appointments")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "appointments",
-        },
-        handleAppointmentChange
-      )
-      .subscribe();
-  };
-
-  const setupQueueSubscription = () => {
-    return supabase
-      .channel("realtime-queue")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "customer_queue",
-        },
-        () => {
-          if (currentAppointment) {
-            fetchCurrentAppointment();
-          }
-        }
-      )
-      .subscribe();
-  };
-
   // Data fetching
   const fetchCurrentAppointment = async () => {
     try {
@@ -202,6 +225,66 @@ const EnhancedAppointmentTimer = ({
     }
   };
 
+  // In EnhancedAppointmentTimer.js
+
+  // In EnhancedAppointmentTimer.js, modify handleCheckInNext:
+
+  const handleCheckInNext = async () => {
+    const nextAppointmentToProcess = nextAppointment || currentAppointment;
+
+    if (!nextAppointmentToProcess) {
+      toast.error("No appointment to process");
+      return;
+    }
+
+    try {
+      if (nextAppointmentToProcess.status === "pending_approval") {
+        const result = await acceptCustomerCheckIn(
+          nextAppointmentToProcess.id,
+          nextAppointmentToProcess.employee_id
+        );
+
+        if (result.error) throw result.error;
+
+        toast.success("Appointment started successfully");
+        // Your existing refresh logic
+      } else if (!nextAppointmentToProcess.arrival_time) {
+        // Existing check-in logic for new arrivals
+        const { data, error } = await supabase
+          .from("appointments")
+          .update({
+            arrival_time: new Date().toISOString(),
+          })
+          .eq("id", nextAppointmentToProcess.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        toast.success("Customer checked in successfully");
+      } else {
+        // Start appointment
+        const { data, error } = await supabase
+          .from("appointments")
+          .update({
+            status: "in_progress",
+            start_time: new Date().toISOString(),
+          })
+          .eq("id", nextAppointmentToProcess.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        toast.success("Appointment started successfully");
+      }
+
+      // Refresh data
+      await fetchCurrentAppointment();
+    } catch (error) {
+      console.error("Error processing appointment:", error);
+      toast.error(error.message || "Failed to process appointment");
+    }
+  };
+
   // Subscription handlers
   const handleAppointmentChange = async (payload) => {
     if (payload.new && isCurrentAppointment(payload.new)) {
@@ -227,104 +310,6 @@ const EnhancedAppointmentTimer = ({
     }
   };
 
-  // Queue management
-  const handleNextCustomerAssignment = async (completedAppointment) => {
-    try {
-      const { data: nextCustomer, error: queueError } = await supabase
-        .from("customer_queue")
-        .select(
-          `
-          *,
-          services:service_id (id, name, duration)
-        `
-        )
-        .eq("facility_id", completedAppointment.facility_id)
-        .eq("status", "waiting")
-        .order("queue_position", { ascending: true })
-        .limit(1)
-        .single();
-
-      if (queueError && queueError.code !== "PGRST116") throw queueError;
-
-      if (nextCustomer) {
-        await createAppointmentForNextCustomer(
-          nextCustomer,
-          completedAppointment
-        );
-      } else {
-        await updateEmployeeStatus(completedAppointment.employee_id, null);
-      }
-
-      return nextCustomer;
-    } catch (error) {
-      console.error("Error handling next customer assignment:", error);
-      throw error;
-    }
-  };
-
-  // Appointment creation
-  const createAppointmentForNextCustomer = async (
-    nextCustomer,
-    completedAppointment
-  ) => {
-    const now = new Date();
-    const appointmentEnd = new Date(
-      now.getTime() + nextCustomer.services.duration * 60 * 1000
-    );
-
-    const { data: newAppointment, error: appointmentError } = await supabase
-      .from("appointments")
-      .insert({
-        customer_name: nextCustomer.customer_name,
-        email: nextCustomer.contact_info.includes("@")
-          ? nextCustomer.contact_info
-          : null,
-        phone: !nextCustomer.contact_info.includes("@")
-          ? nextCustomer.contact_info
-          : null,
-        service_id: nextCustomer.service_id,
-        employee_id: completedAppointment.employee_id,
-        facility_id: completedAppointment.facility_id,
-        start_time: now.toISOString(),
-        end_time: appointmentEnd.toISOString(),
-        status: "in_progress",
-        arrival_time: now.toISOString(),
-      })
-      .select()
-      .single();
-
-    if (appointmentError) throw appointmentError;
-
-    await Promise.all([
-      removeFromQueue(nextCustomer.id),
-      updateEmployeeStatus(completedAppointment.employee_id, newAppointment.id),
-    ]);
-
-    return newAppointment;
-  };
-
-  // Queue and employee status updates
-  const removeFromQueue = async (customerId) => {
-    const { error } = await supabase
-      .from("customer_queue")
-      .delete()
-      .eq("id", customerId);
-
-    if (error) throw error;
-  };
-
-  const updateEmployeeStatus = async (employeeId, customerId) => {
-    const { error } = await supabase
-      .from("employee_queue")
-      .update({
-        current_customer_id: customerId,
-        last_assignment_time: new Date().toISOString(),
-      })
-      .eq("employee_id", employeeId);
-
-    if (error) throw error;
-  };
-
   // Appointment completion
   const handleConfirmFinish = async () => {
     try {
@@ -333,37 +318,33 @@ const EnhancedAppointmentTimer = ({
         return;
       }
 
-      const { data: completedAppointment, error: completionError } =
-        await supabase
-          .from("appointments")
-          .update({
-            status: "completed",
-            price: parseFloat(price),
-            end_time: new Date().toISOString(),
-          })
-          .eq("id", currentAppointment.id)
-          .select()
-          .single();
+      const { status, completedAppointment, nextAppointment, error } =
+        await finishCustomerAppointment(
+          { ...currentAppointment, price: parseFloat(price) },
+          currentAppointment.facility_id
+        );
 
-      if (completionError) throw completionError;
+      if (error) throw error;
 
-      const nextCustomer = await handleNextCustomerAssignment(
-        completedAppointment
-      );
-
+      // Show appropriate success message based on whether a new customer was assigned
       toast.success(
-        nextCustomer
+        status === "NEXT_CUSTOMER_ASSIGNED"
           ? "Appointment completed and new customer assigned!"
-          : "Appointment completed successfully"
+          : "Appointment completed successfully!"
       );
 
+      // Close dialogs and reset state
+      setIsFinishDialogOpen(false);
       setIsConfirmationDialogOpen(false);
+      setPrice("");
+
+      // Notify parent component if callback exists
       if (onAppointmentFinished) {
         onAppointmentFinished(completedAppointment);
       }
     } catch (error) {
       console.error("Error finishing appointment:", error);
-      toast.error("Failed to finish appointment");
+      toast.error("Failed to complete appointment");
     }
   };
 
@@ -563,6 +544,7 @@ const EnhancedAppointmentTimer = ({
               <p className="text-lg">
                 {formatCustomerName(currentAppointment.customer_name)}
               </p>
+
               <Button
                 onClick={() => setIsFinishDialogOpen(true)}
                 className="w-full max-w-xs bg-green-500 hover:bg-green-600 text-white py-4 text-lg rounded-full"
@@ -570,6 +552,26 @@ const EnhancedAppointmentTimer = ({
                 Ukončiť rezerváciu
               </Button>
             </div>
+          )}
+
+          {(nextAppointment || currentAppointment) && (
+            <Button
+              onClick={handleCheckInNext}
+              className="w-full max-w-xs bg-blue-500 hover:bg-blue-600 text-white py-4 text-lg rounded-full mt-2"
+            >
+              <UserCheck className="w-5 h-5 mr-2" />
+              {nextAppointment
+                ? nextAppointment.arrival_time
+                  ? "Start Next Appointment"
+                  : "Check-in Next Customer"
+                : currentAppointment?.arrival_time
+                ? "Start Current Appointment"
+                : "Check-in Current Customer"}
+            </Button>
+          )}
+
+          {nextAppointment && (
+            <NextAppointmentCard appointment={nextAppointment} />
           )}
         </CardContent>
       </Card>

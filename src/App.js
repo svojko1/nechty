@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from "react";
-import ReceptionDashboard from "./components/ReceptionDashboard";
-import { FacilityProvider, useFacility } from "./FacilityContext";
-import FacilitySelector from "./components/FacilitySelector";
+
 import {
   BrowserRouter as Router,
   Route,
@@ -15,17 +13,20 @@ import { Button } from "./components/ui/button";
 import { cn } from "./lib/utils";
 import { supabase } from "./supabaseClient";
 import { toast } from "react-hot-toast";
-import MainNavbar from "./components/MainNavbar";
-import { ArrowLeft, Home, RotateCw } from "lucide-react";
+import { RotateCw } from "lucide-react";
 
 // Import components
-import CheckIn from "./components/CheckIn";
-import BookingSystem from "./components/BookingSystem";
-import ManagerDashboard from "./components/ManagerDashboard";
-import EmployeeDashboard from "./components/EmployeeDashboard";
-import FeedbackPage from "./components/FeedbackSystem";
-import AuthForm from "./components/AuthForm";
-import AdminDashboard from "./components/AdminDashboard";
+import CheckIn from "src/components/booking/CheckInSystem";
+import BookingSystem from "src/components/booking/BookingSystem";
+import ManagerDashboard from "src/components/dashboard/ManagerDashboard";
+import EmployeeDashboard from "src/components/dashboard/employee/EmployeeDashboard";
+import FeedbackPage from "src/components/booking/FeedbackSystem";
+import AuthForm from "src/components/auth/AuthForm";
+import AdminDashboard from "src/components/dashboard/AdminDashboard";
+import MainNavbar from "src/components/layout/MainNavbar";
+import ReceptionDashboard from "src/components/dashboard/ReceptionDashboard";
+import { FacilityProvider, useFacility } from "src/FacilityContext";
+import FacilitySelector from "src/components/facility/FacilitySelector";
 
 // Navigation Controls Component
 const NavigationControls = () => {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+
+import { format, subMonths, startOfMonth } from "date-fns";
 import {
   BarChart,
   Bar,
@@ -12,8 +13,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
 } from "recharts";
 import {
   DollarSign,
@@ -27,17 +26,25 @@ import {
   Search,
   Building,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Progress } from "./ui/progress";
+import { supabase } from "src/supabaseClient";
+
+// UI Components
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "src/components/ui/card";
+import { Progress } from "src/components/ui/progress";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "./ui/select";
-import { Button } from "./ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+} from "src/components/ui/select";
+import { Button } from "src/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "src/components/ui/avatar";
 import {
   Table,
   TableBody,
@@ -45,7 +52,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "./ui/table";
+} from "src/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -53,11 +60,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "./ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { Input } from "./ui/input";
-import EmployeeRegistration from "./EmployeeRegistration";
-import { supabase } from "../supabaseClient";
+} from "src/components/ui/dialog";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "src/components/ui/tabs";
+import { Input } from "src/components/ui/input";
+
+// Functional Components
+import EmployeeRegistration from "src/components/auth/EmployeeRegistration";
 
 const COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A"];
 

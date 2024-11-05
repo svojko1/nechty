@@ -1,9 +1,20 @@
 // src/components/WaitingCustomersDisplay.js
 import React, { useState, useEffect } from "react";
+
 import { format } from "date-fns";
 import { sk } from "date-fns/locale";
 import { Users } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { supabase } from "src/supabaseClient";
+import { toast } from "react-hot-toast";
+import { motion, AnimatePresence } from "framer-motion";
+
+// UI Components
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "src/components/ui/card";
 import {
   Table,
   TableBody,
@@ -11,11 +22,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "./ui/table";
-import { Badge } from "./ui/badge";
-import { supabase } from "../supabaseClient";
-import { toast } from "react-hot-toast";
-import { motion, AnimatePresence } from "framer-motion";
+} from "src/components/ui/table";
+import { Badge } from "src/components/ui/badge";
 
 const WaitingCustomersDisplay = () => {
   const [waitingCustomers, setWaitingCustomers] = useState([]);

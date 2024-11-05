@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { supabase } from "../supabaseClient";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+
+import { supabase } from "src/supabaseClient";
+import { toast } from "react-hot-toast";
+
+// UI Components
+import { Button } from "src/components/ui/button";
+import { Input } from "src/components/ui/input";
+import { Label } from "src/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "./ui/select";
-import { toast } from "react-hot-toast";
+} from "src/components/ui/select";
 
 const EmployeeRegistration = ({ onRegistrationComplete }) => {
   const [email, setEmail] = useState("");

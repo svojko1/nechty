@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from "react";
+
 import { format } from "date-fns";
 import { sk } from "date-fns/locale";
 import { Star, Calendar, Clock, User, CheckCircle } from "lucide-react";
-import { Button } from "./ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
-import { Textarea } from "./ui/textarea";
 import { toast } from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
-import { supabase } from "../supabaseClient";
+import { supabase } from "src/supabaseClient";
+
+// UI Components
+import { Button } from "src/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "src/components/ui/card";
+import { Textarea } from "src/components/ui/textarea";
 
 const ThankYouPage = () => (
   <motion.div

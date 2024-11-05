@@ -1,18 +1,7 @@
 import React, { useState, useEffect } from "react";
+
 import { format, startOfDay, endOfDay } from "date-fns";
 import { sk } from "date-fns/locale";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "./ui/table";
 import {
   Search,
   CalendarClock,
@@ -23,17 +12,39 @@ import {
   Table as TableIcon,
   Building,
 } from "lucide-react";
-import { supabase } from "../supabaseClient";
+import { supabase } from "src/supabaseClient";
+import { toast } from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
+
+// UI Components
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "src/components/ui/card";
+import { Input } from "src/components/ui/input";
+import { Button } from "src/components/ui/button";
+import { Badge } from "src/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "src/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import EmployeeQueueDisplay from "./EmployeeQueueDisplay";
-import { toast } from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
-import WaitingCustomersDisplay from "./WaitingCustomersDisplay";
+} from "src/components/ui/dropdown-menu";
+
+// Functional Components
+import WaitingCustomersDisplay from "src/components/queue/WaitingCustomersDisplay";
+import QueueTester from "src/components/queue/QueueTester";
+import EmployeeQueueDisplay from "src/components/queue/EmployeeQueueDisplay";
 
 const ReceptionDashboard = () => {
   const navigate = useNavigate();
@@ -260,6 +271,9 @@ const ReceptionDashboard = () => {
         <EmployeeQueueDisplay className="mb-10" facilityId={userFacilityId} />
       )}
 
+      {process.env.NODE_ENV === "development" && (
+        <QueueTester facilityId={userFacilityId} />
+      )}
       <WaitingCustomersDisplay />
       <Card className="w-full">
         <CardHeader>

@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+
+import { supabase } from "src/supabaseClient";
+import { toast } from "react-hot-toast";
+
+// UI Components
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "src/components/ui/card";
+import { Button } from "src/components/ui/button";
+import { Input } from "src/components/ui/input";
+import { Label } from "src/components/ui/label";
 import {
   Table,
   TableBody,
@@ -10,10 +20,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "./ui/table";
-import { Checkbox } from "./ui/checkbox";
-import { ScrollArea } from "./ui/scroll-area";
-
+} from "src/components/ui/table";
+import { Checkbox } from "src/components/ui/checkbox";
+import { ScrollArea } from "src/components/ui/scroll-area";
 import {
   Command,
   CommandEmpty,
@@ -21,8 +30,12 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "./ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+} from "src/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "src/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -31,19 +44,23 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
-} from "./ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+} from "src/components/ui/dialog";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "src/components/ui/tabs";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "./ui/select";
-import { Users, DollarSign, Calendar, Star, Building } from "lucide-react";
-import { supabase } from "../supabaseClient";
-import { toast } from "react-hot-toast";
-import PendingEmployeesManager from "./PendingEmployeesManager";
+} from "src/components/ui/select";
+
+// Functional Components
+import PendingEmployeesManager from "src/components/facility/PendingEmployeesManager";
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState([]);

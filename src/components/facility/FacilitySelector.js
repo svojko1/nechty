@@ -1,15 +1,18 @@
 import React, { useEffect } from "react";
+
+import { useFacility } from "src/FacilityContext";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+
+// UI Components
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
   CardFooter,
-} from "./ui/card";
-import { Button } from "./ui/button";
-import { useFacility } from "../FacilityContext";
-import { useNavigate, useLocation } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+} from "src/components/ui/card";
+import { Button } from "src/components/ui/button";
 
 const FacilitySelector = () => {
   const {

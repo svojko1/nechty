@@ -1,15 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  NavigationMenu,
-  NavigationMenuList,
-  NavigationMenuItem,
-} from "./ui/navigation-menu";
-import { Button } from "./ui/button";
-import { ScrollArea } from "./ui/scroll-area";
-import { cn } from "../lib/utils";
-import { supabase } from "../supabaseClient";
+
+import { supabase } from "src/supabaseClient";
 import {
   Sparkles,
   Menu,
@@ -17,13 +8,24 @@ import {
   Calendar,
   Users,
   BarChart,
-  Star,
   LogIn,
   LogOut,
   UserCheck,
   Inbox,
   Settings,
 } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { ScrollArea } from "src/components/ui/scroll-area";
+import { cn } from "src/lib/utils";
+
+// UI Components
+import { Button } from "src/components/ui/button";
+import {
+  NavigationMenu,
+  NavigationMenuList,
+  NavigationMenuItem,
+} from "src/components/ui/navigation-menu";
 
 // NavLink subcomponent
 const NavLink = ({ to, children, icon: Icon, onClick = null }) => {

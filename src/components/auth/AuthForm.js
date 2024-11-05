@@ -1,7 +1,13 @@
 import React, { useState } from "react";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+
+import { supabase } from "src/supabaseClient";
+import { toast } from "react-hot-toast";
+import { AlertCircle } from "lucide-react";
+
+//UI Components
+import { Button } from "src/components/ui/button";
+import { Input } from "src/components/ui/input";
+import { Label } from "src/components/ui/label";
 import {
   Card,
   CardHeader,
@@ -9,69 +15,24 @@ import {
   CardDescription,
   CardContent,
   CardFooter,
-} from "./ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { AlertCircle } from "lucide-react";
-import { Alert, AlertDescription } from "./ui/alert";
-import { supabase } from "../supabaseClient";
-import { toast } from "react-hot-toast";
-import EmployeeRegistration from "./EmployeeRegistration";
+} from "src/components/ui/card";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "src/components/ui/tabs";
+import { Alert, AlertDescription } from "src/components/ui/alert";
+
+//Functional Components
+import EmployeeRegistration from "src/components/auth/EmployeeRegistration";
 
 const AuthForm = ({ setSession }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [phone, setPhone] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isEmployeeRegistered, setIsEmployeeRegistered] = useState(false);
-
-  const handleSignUp = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            first_name: firstName,
-            last_name: lastName,
-            phone,
-            role: "customer", // Default role for new sign-ups
-          },
-        },
-      });
-
-      if (error) throw error;
-
-      // Create a record in the users table
-      const { error: userError } = await supabase.from("users").insert([
-        {
-          id: data.user.id,
-          email: email,
-          first_name: firstName,
-          last_name: lastName,
-          phone: phone,
-          password_hash: "passwordHash",
-          role: "customer",
-        },
-      ]);
-
-      if (userError) throw userError;
-
-      setSession(data.session);
-      toast.success("Account created successfully!");
-    } catch (error) {
-      setError(error.message);
-      toast.error(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSignIn = async (e) => {
     e.preventDefault();
