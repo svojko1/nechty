@@ -574,20 +574,39 @@ const EnhancedAppointmentTimer = ({
             </div>
           )}
 
-          {(nextAppointment || currentAppointment) && (
-            <Button
-              onClick={handleCheckInNext}
-              className="w-full max-w-xs bg-blue-500 hover:bg-blue-600 text-white py-4 text-lg rounded-full mt-2"
-            >
-              <UserCheck className="w-5 h-5 mr-2" />
-              {nextAppointment
-                ? nextAppointment.arrival_time
-                  ? "Start Next Appointment"
-                  : "Check-in Next Customer"
-                : currentAppointment?.arrival_time
-                ? "Start Current Appointment"
-                : "Check-in Current Customer"}
-            </Button>
+          {nextAppointment && (
+            <div className="w-full max-w-xs mt-2">
+              {/* Arrival Status Badge */}
+              <div className="flex justify-center mb-2">
+                <Badge
+                  variant="outline"
+                  className={`${
+                    nextAppointment.arrival_time
+                      ? "bg-green-100 text-green-700 border-green-300"
+                      : "bg-yellow-100 text-yellow-700 border-yellow-300"
+                  }`}
+                >
+                  {nextAppointment.arrival_time
+                    ? `Zákazník prišiel: ${format(
+                        new Date(nextAppointment.arrival_time),
+                        "HH:mm"
+                      )}`
+                    : "Čaká sa na príchod zákazníka"}
+                </Badge>
+              </div>
+              {/* Action Button */}
+              {nextAppointment.arrival_time && !currentAppointment && (
+                <Button
+                  onClick={handleCheckInNext}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-4 text-lg rounded-full"
+                >
+                  <UserCheck className="w-5 h-5 mr-2" />
+                  {nextAppointment.arrival_time
+                    ? "Start Next Appointment"
+                    : "Check-in Next Customer"}
+                </Button>
+              )}
+            </div>
           )}
 
           {nextAppointment && (

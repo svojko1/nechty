@@ -349,7 +349,7 @@ const ManagerDashboard = () => {
       .from("appointments")
       .select(
         `
-        id, start_time, end_time, status, notes, email, phone, price, facility_id,
+        id, start_time, end_time, status, email, phone, price, facility_id,
         services (name),
         employees (users (first_name, last_name))
       `

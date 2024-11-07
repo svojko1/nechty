@@ -113,7 +113,8 @@ const MainNavbar = ({ session, handleLogout }) => {
     { to: "/checkin", label: "Check-in", icon: UserCheck },
   ];
 
-  // Function to get navigation items based on user role
+  // In MainNavbar.js, modify the getNavigationItems function:
+
   const getNavigationItems = () => {
     if (!session) {
       return publicNavigationItems;
@@ -126,10 +127,8 @@ const MainNavbar = ({ session, handleLogout }) => {
         return [{ to: "/reception", label: "Recepcia", icon: Inbox }];
       case "admin":
         return [
-          ...publicNavigationItems,
-          { to: "/zamestnanec", label: "Zamestnanec", icon: Users },
+          // Remove public and other navigation items for admin
           { to: "/manazer", label: "Manažér", icon: BarChart },
-          { to: "/reception", label: "Recepcia", icon: Inbox },
           { to: "/admin", label: "Admin", icon: Settings },
         ];
       case "manager":
