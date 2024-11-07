@@ -16,6 +16,7 @@ import {
   CheckCircle,
   Users,
 } from "lucide-react";
+import { getNextQueueEmployee } from "src/utils/employeeAvailability";
 
 // UI Components
 import { Button } from "src/components/ui/button";
@@ -56,6 +57,45 @@ import {
   TabsTrigger,
 } from "src/components/ui/tabs";
 
+const NextEmployeeCard = ({ employee }) => {
+  if (!employee) return null;
+
+  return (
+    <Card className="mb-6 bg-gradient-to-r from-pink-50 to-purple-50">
+      <CardContent className="p-6">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-4">
+            <div className="bg-white p-3 rounded-full shadow">
+              <Users className="h-6 w-6 text-pink-500" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Nasledujúci v rade
+              </h3>
+              <p className="text-sm text-gray-500">
+                {employee.employees.users.first_name}{" "}
+                {employee.employees.users.last_name}
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <Badge variant="outline" className="mb-2">
+              Kolo {employee.queue_round}
+            </Badge>
+            <p className="text-sm text-gray-500">
+              Stôl #{employee.employees.table_number}
+            </p>
+            <p className="text-xs text-gray-400">
+              Pozícia:{" "}
+              {employee.position_in_queue || employee.next_round_position}
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 const QueueTester = ({ facilityId }) => {
   // State management
   const [isLoading, setIsLoading] = useState(false);
@@ -69,6 +109,7 @@ const QueueTester = ({ facilityId }) => {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
   const [price, setPrice] = useState("");
+  const [nextQueueEmployee, setNextQueueEmployee] = useState(null);
 
   // Initial data load
   useEffect(() => {
@@ -188,6 +229,42 @@ const QueueTester = ({ facilityId }) => {
     }
   };
 
+  const handleFinishInitialCheckIn = async () => {
+    setIsLoading(true);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+
+      // Get current daily queue
+      const { data: dailyQueue } = await supabase
+        .from("daily_facility_queue")
+        .select("*")
+        .eq("facility_id", facilityId)
+        .eq("date", today)
+        .single();
+
+      if (dailyQueue) {
+        // Update daily queue to mark initial round as completed
+        const { error: updateError } = await supabase
+          .from("daily_facility_queue")
+          .update({
+            initial_round_completed: true,
+          })
+          .eq("id", dailyQueue.id);
+
+        if (updateError) throw updateError;
+        toast.success("Initial check-in phase completed");
+        await refreshAllData();
+      } else {
+        toast.error("No active daily queue found");
+      }
+    } catch (error) {
+      console.error("Error finishing initial check-in:", error);
+      toast.error("Failed to complete initial check-in phase");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const refreshAllData = async () => {
     setIsLoading(true);
     try {
@@ -197,6 +274,7 @@ const QueueTester = ({ facilityId }) => {
         fetchActiveEmployees(),
         fetchCustomerQueue(),
         fetchActiveAppointments(),
+        fetchNextEmployee(), // Add this line
       ]);
       toast.success("Data refreshed successfully");
     } catch (error) {
@@ -204,6 +282,18 @@ const QueueTester = ({ facilityId }) => {
       toast.error("Failed to refresh some data");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Add this new function
+  const fetchNextEmployee = async () => {
+    try {
+      const { data, error } = await getNextQueueEmployee(facilityId);
+      if (error) throw error;
+      setNextQueueEmployee(data);
+    } catch (error) {
+      console.error("Error fetching next employee:", error);
+      toast.error("Failed to fetch next employee");
     }
   };
 
@@ -519,15 +609,28 @@ const QueueTester = ({ facilityId }) => {
           <CardTitle className="text-xl font-bold text-pink-700">
             Queue Testing Tools
           </CardTitle>
-          <Button
-            onClick={refreshAllData}
-            variant="outline"
-            size="sm"
-            disabled={isLoading}
-          >
-            <RefreshCcw className="w-4 h-4 mr-2" />
-            Refresh All
-          </Button>
+          <div className="flex space-x-2">
+            {" "}
+            {/* Changed to div with flex */}
+            <Button
+              onClick={handleFinishInitialCheckIn}
+              variant="outline"
+              size="sm"
+              disabled={isLoading}
+              className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border-yellow-300"
+            >
+              Ukončit Checkin zamestnancov
+            </Button>
+            <Button
+              onClick={refreshAllData}
+              variant="outline"
+              size="sm"
+              disabled={isLoading}
+            >
+              <RefreshCcw className="w-4 h-4 mr-2" />
+              Refresh All
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -552,7 +655,10 @@ const QueueTester = ({ facilityId }) => {
           <TabsContent value="appointments">
             {renderActiveAppointments()}
           </TabsContent>
-
+          <TabsContent value="employees">
+            {renderEmployeeTable()}
+            <NextEmployeeCard employee={nextQueueEmployee} />
+          </TabsContent>
           <TabsContent value="queue">{renderCustomerQueue()}</TabsContent>
         </Tabs>
 

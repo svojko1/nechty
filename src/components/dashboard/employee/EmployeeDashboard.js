@@ -108,6 +108,10 @@ const EmployeeDashboard = ({ session }) => {
   useEffect(() => {
     if (employeeData?.id) {
       fetchAppointments();
+      const cleanup = setupRealtimeSubscription();
+      return () => {
+        cleanup();
+      };
     }
   }, [employeeData]);
 
@@ -118,14 +122,73 @@ const EmployeeDashboard = ({ session }) => {
     }
   }, [appointments]);
 
-  // Setup Realtime Subscription
   const setupRealtimeSubscription = () => {
+    // Create a more specific channel name
     const subscription = supabase
-      .channel("appointments")
+      .channel(`employee_appointments_${employeeData?.id}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "appointments" },
+        {
+          event: "*",
+          schema: "public",
+          table: "appointments",
+          filter: `employee_id=eq.${employeeData?.id}`,
+        },
+        (payload) => {
+          console.log("Appointment change detected:", payload);
+
+          // Handle different types of changes
+          switch (payload.eventType) {
+            case "INSERT":
+              // Add new appointment to the list
+              if (payload.new) {
+                setAppointments((prev) => {
+                  // Avoid duplicates
+                  if (prev.find((apt) => apt.id === payload.new.id))
+                    return prev;
+                  return [...prev, payload.new].sort(
+                    (a, b) => new Date(a.start_time) - new Date(b.start_time)
+                  );
+                });
+              }
+              break;
+
+            case "UPDATE":
+              // Update existing appointment
+              setAppointments((prev) =>
+                prev.map((apt) =>
+                  apt.id === payload.new.id ? { ...apt, ...payload.new } : apt
+                )
+              );
+              break;
+
+            case "DELETE":
+              // Remove appointment
+              setAppointments((prev) =>
+                prev.filter((apt) => apt.id !== payload.old.id)
+              );
+              break;
+          }
+
+          // Update current appointment status
+          updateCurrentAppointment(appointments);
+        }
+      )
+      .subscribe();
+
+    // Also subscribe to customer queue changes
+    const queueSubscription = supabase
+      .channel(`employee_queue_${employeeData?.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "customer_queue",
+          filter: `facility_id=eq.${employeeData?.facility_id}`,
+        },
         () => {
+          // Refresh appointments when queue changes
           fetchAppointments();
         }
       )
@@ -133,6 +196,7 @@ const EmployeeDashboard = ({ session }) => {
 
     return () => {
       supabase.removeChannel(subscription);
+      supabase.removeChannel(queueSubscription);
     };
   };
 

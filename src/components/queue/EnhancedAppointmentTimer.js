@@ -225,10 +225,6 @@ const EnhancedAppointmentTimer = ({
     }
   };
 
-  // In EnhancedAppointmentTimer.js
-
-  // In EnhancedAppointmentTimer.js, modify handleCheckInNext:
-
   const handleCheckInNext = async () => {
     const nextAppointmentToProcess = nextAppointment || currentAppointment;
 
@@ -238,75 +234,99 @@ const EnhancedAppointmentTimer = ({
     }
 
     try {
-      if (nextAppointmentToProcess.status === "pending_approval") {
-        const result = await acceptCustomerCheckIn(
-          nextAppointmentToProcess.id,
-          nextAppointmentToProcess.employee_id
-        );
+      // Start a Supabase transaction
+      const client = await supabase.rpc("begin_transaction");
 
-        if (result.error) throw result.error;
+      try {
+        if (nextAppointmentToProcess.status === "pending_approval") {
+          // Handle pending approval case
+          const result = await acceptCustomerCheckIn(
+            nextAppointmentToProcess.id
+          );
+          if (result.error) throw result.error;
 
-        toast.success("Appointment started successfully");
-        // Your existing refresh logic
-      } else if (!nextAppointmentToProcess.arrival_time) {
-        // Existing check-in logic for new arrivals
-        const { data, error } = await supabase
-          .from("appointments")
-          .update({
-            arrival_time: new Date().toISOString(),
-          })
-          .eq("id", nextAppointmentToProcess.id)
-          .select()
-          .single();
+          // Update employee queue
+          const { error: queueError } = await supabase
+            .from("employee_queue")
+            .update({
+              current_customer_id: nextAppointmentToProcess.id,
+              last_assignment_time: new Date().toISOString(),
+            })
+            .eq("employee_id", nextAppointmentToProcess.employee_id)
+            .eq("is_active", true);
 
-        if (error) throw error;
-        toast.success("Customer checked in successfully");
-      } else {
-        // Start appointment
-        const { data, error } = await supabase
-          .from("appointments")
-          .update({
-            status: "in_progress",
-            start_time: new Date().toISOString(),
-          })
-          .eq("id", nextAppointmentToProcess.id)
-          .select()
-          .single();
+          if (queueError) throw queueError;
 
-        if (error) throw error;
-        toast.success("Appointment started successfully");
+          await supabase.rpc("commit_transaction");
+          toast.success("Appointment started successfully");
+        } else if (!nextAppointmentToProcess.arrival_time) {
+          // Handle new arrival check-in
+          const { data, error } = await supabase
+            .from("appointments")
+            .update({
+              arrival_time: new Date().toISOString(),
+              status: "pending_approval",
+            })
+            .eq("id", nextAppointmentToProcess.id)
+            .select()
+            .single();
+
+          if (error) throw error;
+
+          // Update employee queue to show this pending customer
+          const { error: queueError } = await supabase
+            .from("employee_queue")
+            .update({
+              current_customer_id: nextAppointmentToProcess.id,
+              last_assignment_time: new Date().toISOString(),
+            })
+            .eq("employee_id", nextAppointmentToProcess.employee_id)
+            .eq("is_active", true);
+
+          if (queueError) throw queueError;
+
+          await supabase.rpc("commit_transaction");
+          toast.success("Customer checked in successfully");
+        } else {
+          // Start appointment for already checked-in customer
+          const now = new Date();
+          const { data, error } = await supabase
+            .from("appointments")
+            .update({
+              status: "in_progress",
+              start_time: now.toISOString(),
+            })
+            .eq("id", nextAppointmentToProcess.id)
+            .select()
+            .single();
+
+          if (error) throw error;
+
+          // Update employee queue with the current customer
+          const { error: queueError } = await supabase
+            .from("employee_queue")
+            .update({
+              current_customer_id: nextAppointmentToProcess.id,
+              last_assignment_time: now.toISOString(),
+            })
+            .eq("employee_id", nextAppointmentToProcess.employee_id)
+            .eq("is_active", true);
+
+          if (queueError) throw queueError;
+
+          await supabase.rpc("commit_transaction");
+          toast.success("Appointment started successfully");
+        }
+
+        // Refresh data
+        await fetchCurrentAppointment();
+      } catch (error) {
+        await supabase.rpc("rollback_transaction");
+        throw error;
       }
-
-      // Refresh data
-      await fetchCurrentAppointment();
     } catch (error) {
       console.error("Error processing appointment:", error);
       toast.error(error.message || "Failed to process appointment");
-    }
-  };
-
-  // Subscription handlers
-  const handleAppointmentChange = async (payload) => {
-    if (payload.new && isCurrentAppointment(payload.new)) {
-      const { data } = await supabase
-        .from("appointments")
-        .select(
-          `
-          *,
-          services (name, duration, price),
-          employees (
-            id,
-            users (first_name, last_name)
-          )
-        `
-        )
-        .eq("id", payload.new.id)
-        .single();
-
-      if (data) {
-        setCurrentAppointment(data);
-        updateStatus(data);
-      }
     }
   };
 

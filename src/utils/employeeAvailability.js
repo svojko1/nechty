@@ -1,345 +1,209 @@
 // src/utils/employeeAvailability.js
 
+import { se } from "date-fns/locale";
 import { supabase } from "../supabaseClient";
 
 /**
- * Check if an employee is available at a specific time
- * @param {string} employeeId - The ID of the employee to check
- * @param {Date} startTime - The start time to check availability for
- * @param {Date} endTime - The end time to check availability for
- * @param {string} facilityId - The facility ID
- * @returns {Promise<boolean>} - Whether the employee is available
+ * Handle employee check-in at the start of their shift
+ * Assigns employee to appropriate round based on daily facility queue status
  */
-export const isEmployeeAvailable = async (
-  employeeId,
-  startTime,
-  endTime,
-  facilityId
-) => {
-  try {
-    // Check if employee is checked in and active
-    const { data: queueData, error: queueError } = await supabase
-      .from("employee_queue")
-      .select("*")
-      .eq("employee_id", employeeId)
-      .eq("facility_id", facilityId)
-      .eq("is_active", true)
-      .single();
-
-    if (queueError) return false;
-
-    // Check if employee is on break
-    const now = new Date();
-    if (
-      queueData.break_start &&
-      (!queueData.break_end || new Date(queueData.break_end) > now)
-    ) {
-      return false;
-    }
-
-    // Check for overlapping appointments
-    const { data: appointments, error: appointmentError } = await supabase
-      .from("appointments")
-      .select("*")
-      .eq("employee_id", employeeId)
-      .or(
-        `and(start_time.gte.${startTime.toISOString()},start_time.lt.${endTime.toISOString()}),` +
-          `and(end_time.gt.${startTime.toISOString()},end_time.lte.${endTime.toISOString()}),` +
-          `and(start_time.lte.${startTime.toISOString()},end_time.gte.${endTime.toISOString()})`
-      );
-
-    if (appointmentError) throw appointmentError;
-
-    return appointments.length === 0;
-  } catch (error) {
-    console.error("Error checking employee availability:", error);
-    return false;
-  }
-};
-
-// In employeeAvailability.js, add this function:
-
-export const handleEarlyCheckIn = async (appointmentId) => {
-  try {
-    const now = new Date();
-
-    // Get appointment details first
-    const { data: appointment, error: fetchError } = await supabase
-      .from("appointments")
-      .select("*")
-      .eq("id", appointmentId)
-      .single();
-
-    if (fetchError) throw fetchError;
-
-    // Calculate time difference in minutes
-    const startTime = new Date(appointment.start_time);
-    const timeDifference = (startTime - now) / (1000 * 60); // minutes
-
-    // If more than 30 minutes early, set to pending
-    if (timeDifference > 30) {
-      const { data, error } = await supabase
-        .from("appointments")
-        .update({
-          status: "pending_check_in",
-          arrival_time: now.toISOString(),
-        })
-        .eq("id", appointmentId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return { status: "PENDING_APPROVAL", data };
-    }
-
-    // Otherwise proceed with normal check-in
-    const { data, error } = await supabase
-      .from("appointments")
-      .update({
-        status: "in_progress",
-        arrival_time: now.toISOString(),
-        start_time: now.toISOString(),
-      })
-      .eq("id", appointmentId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return { status: "CHECKED_IN", data };
-  } catch (error) {
-    console.error("Error handling early check-in:", error);
-    return { status: "ERROR", error };
-  }
-};
-
-export const confirmEarlyCheckIn = async (appointmentId) => {
-  try {
-    const now = new Date();
-    const { data, error } = await supabase
-      .from("appointments")
-      .update({
-        status: "in_progress",
-        start_time: now.toISOString(),
-      })
-      .eq("id", appointmentId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return { status: "CHECKED_IN", data };
-  } catch (error) {
-    console.error("Error confirming early check-in:", error);
-    return { status: "ERROR", error };
-  }
-};
-
-/**
- * Get the next available employee for a given time slot
- * @param {string} facilityId - The facility ID
- * @param {Date} startTime - The start time to check availability for
- * @param {Date} endTime - The end time to check availability for
- * @returns {Promise<Object|null>} - The next available employee or null if none found
- */
-export const getNextAvailableEmployee = async (
-  facilityId,
-  startTime,
-  endTime
-) => {
-  try {
-    const cutoffTime = new Date();
-    cutoffTime.setHours(10, 0, 0, 0); // 10:00 AM
-
-    // Get all active employees in queue order
-    const { data: queueData, error: queueError } = await supabase
-      .from("employee_queue")
-      .select(
-        `
-        *,
-        employees!inner(
-          id,
-          users (first_name, last_name)
-        )
-      `
-      )
-      .eq("facility_id", facilityId)
-      .eq("is_active", true)
-      .order("queue_round", { ascending: true })
-      .order("position_in_queue", { ascending: true });
-
-    if (queueError) throw queueError;
-
-    // Group employees by round
-    const employeesByRound = queueData.reduce((acc, emp) => {
-      const round = new Date(emp.check_in_time) <= cutoffTime ? 1 : 2;
-      if (!acc[round]) acc[round] = [];
-      acc[round].push(emp);
-      return acc;
-    }, {});
-
-    // Check availability for each employee in round order
-    for (const round of Object.keys(employeesByRound).sort()) {
-      for (const employee of employeesByRound[round]) {
-        const isAvailable = await isEmployeeAvailable(
-          employee.employee_id,
-          startTime,
-          endTime,
-          facilityId
-        );
-
-        if (isAvailable) {
-          return employee;
-        }
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.error("Error getting next available employee:", error);
-    return null;
-  }
-};
-
 export const handleEmployeeCheckIn = async (employeeId, facilityId) => {
   try {
     const now = new Date();
-    const cutoffTime = new Date();
-    cutoffTime.setHours(10, 0, 0, 0); // 10:00 AM
+    const today = now.toISOString().split("T")[0];
 
     // Start a Supabase transaction
-    const { data: employee, error: employeeError } = await supabase
-      .from("employees")
-      .select("id")
-      .eq("id", employeeId)
-      .single();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const client = await supabase.rpc("begin_transaction");
 
-    if (employeeError) throw employeeError;
+    try {
+      // Get or create daily facility queue
+      let { data: dailyQueue } = await supabase
+        .from("daily_facility_queue")
+        .select("*")
+        .eq("facility_id", facilityId)
+        .eq("date", today)
+        .single();
 
-    // Determine queue round based on check-in time
-    const queueRound = now <= cutoffTime ? 1 : 2;
+      if (!dailyQueue) {
+        // Initialize daily queue if it doesn't exist
+        const { data: newQueue, error: initError } = await supabase
+          .from("daily_facility_queue")
+          .insert({
+            facility_id: facilityId,
+            date: today,
+            current_position: 0,
+            current_round: 1,
+            initial_round_completed: false,
+          })
+          .select()
+          .single();
 
-    // Get current active employees count to determine position
-    const { data: activeEmployees, error: countError } = await supabase
-      .from("employee_queue")
-      .select("position_in_queue")
-      .eq("facility_id", facilityId)
-      .eq("is_active", true)
-      .order("position_in_queue", { ascending: false });
+        if (initError) throw initError;
+        dailyQueue = newQueue;
+      }
 
-    if (countError) throw countError;
+      // Determine queue position and round
+      let queueRound = dailyQueue.current_round;
+      let nextRoundPosition;
 
-    // Calculate next position in queue
-    const nextPosition =
-      activeEmployees.length > 0
-        ? Math.max(...activeEmployees.map((emp) => emp.position_in_queue)) + 1
-        : 1;
+      // Get highest position in current round
+      const { data: lastPosition } = await supabase
+        .from("employee_queue")
+        .select("position_in_queue")
+        .eq("facility_id", facilityId)
+        .eq("queue_round", queueRound)
+        .order("position_in_queue", { ascending: false })
+        .limit(1)
+        .single();
 
-    // Check for waiting customers
-    const { data: waitingCustomer, error: waitingError } = await supabase
-      .from("customer_queue")
-      .select(
-        `
-          *,
-          services (id, name, duration)
-        `
-      )
-      .eq("facility_id", facilityId)
-      .eq("status", "waiting")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .single();
+      const newPosition = lastPosition ? lastPosition.position_in_queue + 1 : 1;
 
-    // Create employee queue entry
-    const { data: queueEntry, error: queueError } = await supabase
-      .from("employee_queue")
-      .insert({
-        employee_id: employeeId,
-        facility_id: facilityId,
-        check_in_time: now.toISOString(),
-        is_active: true,
-        queue_round: queueRound,
-        position_in_queue: nextPosition,
-        last_assignment_time: now.toISOString(),
-      })
-      .select()
-      .single();
+      // If initial round is completed, assign to next round
+      if (dailyQueue.initial_round_completed) {
+        queueRound = dailyQueue.current_round + 1;
 
-    if (queueError) throw queueError;
+        // Get highest next_round_position
+        const { data: lastNextPosition } = await supabase
+          .from("employee_queue")
+          .select("next_round_position")
+          .eq("facility_id", facilityId)
+          .eq("queue_round", queueRound)
+          .order("next_round_position", { ascending: false })
+          .limit(1)
+          .single();
 
-    // If there's a waiting customer, create an appointment
-    if (waitingCustomer && !waitingError) {
-      const appointmentEndTime = new Date(
-        now.getTime() + waitingCustomer.services.duration * 60 * 1000
-      );
+        nextRoundPosition = lastNextPosition
+          ? lastNextPosition.next_round_position + 1
+          : 1;
+      } else {
+        nextRoundPosition = newPosition;
+      }
 
-      // Create appointment for waiting customer
-      const { data: appointment, error: appointmentError } = await supabase
-        .from("appointments")
+      // Create queue entry for employee
+      const { data: queueEntry, error: queueError } = await supabase
+        .from("employee_queue")
         .insert({
-          customer_name: waitingCustomer.customer_name,
-          email: waitingCustomer.contact_info.includes("@")
-            ? waitingCustomer.contact_info
-            : null,
-          phone: !waitingCustomer.contact_info.includes("@")
-            ? waitingCustomer.contact_info
-            : null,
-          service_id: waitingCustomer.service_id,
           employee_id: employeeId,
           facility_id: facilityId,
-          start_time: now.toISOString(),
-          end_time: appointmentEndTime.toISOString(),
-          status: "in_progress",
-          arrival_time: now.toISOString(),
-          created_at: now.toISOString(),
-          updated_at: now.toISOString(),
+          check_in_time: now.toISOString(),
+          is_active: true,
+          current_customer_id: null,
+          queue_round: queueRound,
+          position_in_queue: dailyQueue.initial_round_completed
+            ? null
+            : newPosition,
+          next_round_position: nextRoundPosition,
         })
         .select()
         .single();
 
-      if (appointmentError) throw appointmentError;
+      if (queueError) throw queueError;
 
-      // Update employee queue with customer assignment
-      const { error: updateError } = await supabase
-        .from("employee_queue")
-        .update({
-          current_customer_id: appointment.id,
-          last_assignment_time: now.toISOString(),
-        })
-        .eq("id", queueEntry.id);
-
-      if (updateError) throw updateError;
-
-      // Remove customer from queue
-      const { error: removeError } = await supabase
+      // Check for waiting customers in queue
+      const { data: nextCustomer } = await supabase
         .from("customer_queue")
-        .delete()
-        .eq("id", waitingCustomer.id);
+        .select("*, services(duration)")
+        .eq("facility_id", facilityId)
+        .eq("status", "waiting")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .single();
 
-      if (removeError) throw removeError;
+      if (nextCustomer) {
+        // Calculate service end time
+        const endTime = new Date(
+          now.getTime() + nextCustomer.services.duration * 60 * 1000
+        );
 
+        // Create appointment for waiting customer
+        const { data: appointment, error: appointmentError } = await supabase
+          .from("appointments")
+          .insert({
+            customer_name: nextCustomer.customer_name,
+            email: nextCustomer.contact_info.includes("@")
+              ? nextCustomer.contact_info
+              : null,
+            phone: !nextCustomer.contact_info.includes("@")
+              ? nextCustomer.contact_info
+              : null,
+            service_id: nextCustomer.service_id,
+            employee_id: employeeId,
+            facility_id: facilityId,
+            start_time: now.toISOString(),
+            end_time: endTime.toISOString(),
+            status: "in_progress",
+            arrival_time: now.toISOString(),
+          })
+          .select()
+          .single();
+
+        if (appointmentError) throw appointmentError;
+
+        // Update employee queue with new customer
+        await supabase
+          .from("employee_queue")
+          .update({
+            current_customer_id: appointment.id,
+            last_assignment_time: now.toISOString(),
+          })
+          .eq("id", queueEntry.id);
+
+        // Remove customer from queue
+        await supabase
+          .from("customer_queue")
+          .delete()
+          .eq("id", nextCustomer.id);
+
+        // Update current position in daily queue
+        await supabase
+          .from("daily_facility_queue")
+          .update({
+            current_position: newPosition,
+          })
+          .eq("id", dailyQueue.id);
+
+        await supabase.rpc("commit_transaction");
+        return {
+          data: {
+            ...queueEntry,
+            appointment,
+          },
+          type: "CHECKED_IN_WITH_CUSTOMER",
+          error: null,
+        };
+      }
+
+      await supabase.rpc("commit_transaction");
       return {
-        data: {
-          ...queueEntry,
-          assigned_customer: appointment,
-        },
+        data: queueEntry,
+        type: "CHECKED_IN",
         error: null,
       };
+    } catch (error) {
+      await supabase.rpc("rollback_transaction");
+      throw error;
     }
-
-    return { data: queueEntry, error: null };
   } catch (error) {
     console.error("Error checking in employee:", error);
     return { data: null, error };
   }
 };
 
-// Add this new export
+/**
+ * Handle employee check-out at the end of their shift
+ */
 export const handleEmployeeCheckOut = async (queueEntryId, facilityId) => {
   try {
-    // Update current employee status
-    const { data: updatedEntry, error: updateError } = await supabase
+    const now = new Date();
+
+    // Update employee queue entry
+    const { data, error } = await supabase
       .from("employee_queue")
       .update({
-        check_out_time: new Date().toISOString(),
+        check_out_time: now.toISOString(),
         is_active: false,
         current_customer_id: null,
       })
@@ -347,492 +211,689 @@ export const handleEmployeeCheckOut = async (queueEntryId, facilityId) => {
       .select()
       .single();
 
-    if (updateError) throw updateError;
-
-    // Reorder remaining employees in the queue
-    const { data: activeEmployees, error: fetchError } = await supabase
-      .from("employee_queue")
-      .select("*")
-      .eq("facility_id", facilityId)
-      .eq("is_active", true)
-      .order("queue_round", { ascending: true })
-      .order("position_in_queue", { ascending: true });
-
-    if (fetchError) throw fetchError;
-
-    // Update positions of remaining employees
-    const updatePromises = activeEmployees.map((emp, index) => {
-      if (emp.position_in_queue !== index + 1) {
-        return supabase
-          .from("employee_queue")
-          .update({ position_in_queue: index + 1 })
-          .eq("id", emp.id);
-      }
-      return Promise.resolve();
-    });
-
-    await Promise.all(updatePromises);
-
-    return { data: updatedEntry, error: null };
+    if (error) throw error;
+    return { data, error: null };
   } catch (error) {
     console.error("Error checking out employee:", error);
     return { data: null, error };
   }
 };
 
-// In employeeAvailability.js
-
 export const processCustomerArrival = async (customerData, facilityId) => {
   try {
-    // Get the service details for duration
-    const { data: serviceData, error: serviceError } = await supabase
-      .from("services")
-      .select("*")
-      .eq("id", customerData.service_id)
-      .single();
-
-    if (serviceError) throw serviceError;
-
     const now = new Date();
-    const endTime = new Date(now.getTime() + serviceData.duration * 60 * 1000);
+    const today = now.toISOString().split("T")[0];
 
-    // Check if this is a scheduled appointment checking in early
-    if (customerData.requested_start_time) {
-      const scheduledStart = new Date(customerData.requested_start_time);
+    // Start transaction
+    const client = await supabase.rpc("begin_transaction");
 
-      // If more than 30 mins early, require approval
-      if (scheduledStart > now && scheduledStart - now > 30 * 60 * 1000) {
-        // Check for available employee
-        const availableEmployee = await getNextAvailableEmployee(
-          facilityId,
-          now,
-          endTime
-        );
+    try {
+      // Get daily queue status
+      let { data: dailyQueue } = await supabase
+        .from("daily_facility_queue")
+        .select("*")
+        .eq("facility_id", facilityId)
+        .eq("date", today)
+        .single();
 
-        if (availableEmployee) {
-          // Create appointment with pending_approval status
-          const { data: appointment, error: appointmentError } = await supabase
-            .from("appointments")
-            .insert({
-              customer_name: customerData.customer_name,
-              email: customerData.contact_info.includes("@")
-                ? customerData.contact_info
-                : null,
-              phone: !customerData.contact_info.includes("@")
-                ? customerData.contact_info
-                : null,
-              service_id: customerData.service_id,
-              employee_id: availableEmployee.employee_id,
-              facility_id: facilityId,
-              start_time: scheduledStart.toISOString(),
-              end_time: new Date(
-                scheduledStart.getTime() + serviceData.duration * 60 * 1000
-              ).toISOString(),
-              status: "pending_approval",
-              arrival_time: now.toISOString(),
-              created_at: now.toISOString(),
-              updated_at: now.toISOString(),
+      if (!dailyQueue) {
+        // Initialize daily queue if it doesn't exist
+        const { data: newQueue, error: initError } = await supabase
+          .from("daily_facility_queue")
+          .insert({
+            facility_id: facilityId,
+            date: today,
+            current_position: 0, // Start with 0 to indicate no appointments yet
+            current_round: 1,
+            initial_round_completed: false,
+          })
+          .select()
+          .single();
+
+        if (initError) throw initError;
+        dailyQueue = newQueue;
+      }
+
+      // Inside processCustomerArrival function, after getting daily queue:
+
+      if (dailyQueue.current_position === 0) {
+        // Check for available employees in current round
+        const { data: availableInCurrentRound } = await supabase
+          .from("employee_queue")
+          .select("*")
+          .eq("facility_id", facilityId)
+          .eq("queue_round", dailyQueue.current_round)
+          .eq("is_active", true)
+          .is("current_customer_id", null);
+
+        if (!availableInCurrentRound?.length) {
+          // No available employees in current round, move to next round
+          const nextRound = dailyQueue.current_round + 1;
+
+          // Update daily queue to next round
+          const { error: updateError } = await supabase
+            .from("daily_facility_queue")
+            .update({
+              current_round: nextRound,
+              current_position: 0,
+              initial_round_completed: true,
             })
-            .select()
-            .single();
+            .eq("id", dailyQueue.id);
 
-          if (appointmentError) throw appointmentError;
+          if (updateError) throw updateError;
 
-          return {
-            type: "PENDING_APPROVAL",
-            data: appointment,
-            error: null,
+          // Update daily queue reference
+          dailyQueue = {
+            ...dailyQueue,
+            current_round: nextRound,
+            current_position: 0,
+            initial_round_completed: true,
           };
+
+          // Update only round number for all active employees
+          const { error: empUpdateError } = await supabase
+            .from("employee_queue")
+            .update({
+              queue_round: nextRound,
+            })
+            .eq("facility_id", facilityId)
+            .eq("is_active", true);
+
+          if (empUpdateError) throw empUpdateError;
         }
       }
-    }
 
-    // Check for available employee for immediate service
-    const availableEmployee = await getNextAvailableEmployee(
-      facilityId,
-      now,
-      endTime
-    );
+      // Continue with existing logic to find available employee...
 
-    if (availableEmployee) {
-      // Create immediate appointment
-      const { data: appointment, error: appointmentError } = await supabase
-        .from("appointments")
-        .insert({
-          customer_name: customerData.customer_name,
-          email: customerData.contact_info.includes("@")
-            ? customerData.contact_info
-            : null,
-          phone: !customerData.contact_info.includes("@")
-            ? customerData.contact_info
-            : null,
-          service_id: customerData.service_id,
-          employee_id: availableEmployee.employee_id,
-          facility_id: facilityId,
-          start_time: now.toISOString(),
-          end_time: endTime.toISOString(),
-          status: "in_progress",
-          arrival_time: now.toISOString(),
-          created_at: now.toISOString(),
-          updated_at: now.toISOString(),
-        })
-        .select()
-        .single();
-
-      if (appointmentError) throw appointmentError;
-
-      // Update employee queue status
-      const { error: queueUpdateError } = await supabase
+      // Get all employees in current round with their positions and current status
+      const { data: employeesInRound, error: empError } = await supabase
         .from("employee_queue")
-        .update({
-          current_customer_id: appointment.id,
-          last_assignment_time: now.toISOString(),
-        })
-        .eq("id", availableEmployee.id);
-
-      if (queueUpdateError) throw queueUpdateError;
-
-      return {
-        type: "IMMEDIATE_ASSIGNMENT",
-        data: appointment,
-        error: null,
-      };
-    }
-
-    // If no employee is available, add to queue
-    // First, get or create the daily facility queue counter
-    const { data: dailyQueue, error: dailyQueueError } = await supabase
-      .from("daily_facility_queue")
-      .select("current_position")
-      .eq("facility_id", facilityId)
-      .eq("date", now.toISOString().split("T")[0])
-      .single();
-
-    let nextPosition = 1;
-
-    if (dailyQueueError && dailyQueueError.code === "PGRST116") {
-      // No record exists for today, create one
-      const { data: newDailyQueue, error: createError } = await supabase
-        .from("daily_facility_queue")
-        .insert([
-          {
-            facility_id: facilityId,
-            date: now.toISOString().split("T")[0],
-            current_position: 1,
-          },
-        ])
-        .select()
-        .single();
-
-      if (createError) throw createError;
-      nextPosition = 1;
-    } else if (dailyQueueError) {
-      throw dailyQueueError;
-    } else {
-      // Increment the counter
-      const { data: updatedQueue, error: updateError } = await supabase
-        .from("daily_facility_queue")
-        .update({ current_position: dailyQueue.current_position + 1 })
+        .select(
+          `
+          *,
+          employees!inner(
+            id,
+            users!inner(
+              first_name,
+              last_name
+            )
+          )
+        `
+        )
         .eq("facility_id", facilityId)
-        .eq("date", now.toISOString().split("T")[0])
+        .eq("is_active", true)
+        .eq("queue_round", dailyQueue.current_round)
+        .order("position_in_queue", { ascending: true });
+
+      if (empError) throw empError;
+
+      // Find next available employee after the last appointment position
+      const availableEmployee = employeesInRound?.find(
+        (emp) =>
+          emp.current_customer_id === null &&
+          emp.position_in_queue > dailyQueue.current_position
+      );
+
+      // If no employee found after current position, wrap around to the beginning
+      const firstAvailableEmployee = !availableEmployee
+        ? employeesInRound?.find((emp) => emp.current_customer_id === null)
+        : null;
+
+      const selectedEmployee = availableEmployee || firstAvailableEmployee;
+
+      if (selectedEmployee) {
+        // Get service duration
+        const { data: service } = await supabase
+          .from("services")
+          .select("duration")
+          .eq("id", customerData.service_id)
+          .single();
+
+        const endTime = new Date(now.getTime() + service.duration * 60 * 1000);
+
+        // Create immediate appointment
+        const { data: appointment, error: appointmentError } = await supabase
+          .from("appointments")
+          .insert({
+            customer_name: customerData.customer_name,
+            email: customerData.contact_info.includes("@")
+              ? customerData.contact_info
+              : null,
+            phone: !customerData.contact_info.includes("@")
+              ? customerData.contact_info
+              : null,
+            service_id: customerData.service_id,
+            employee_id: selectedEmployee.employee_id,
+            facility_id: facilityId,
+            start_time: now.toISOString(),
+            end_time: endTime.toISOString(),
+            status: "in_progress",
+            arrival_time: now.toISOString(),
+          })
+          .select()
+          .single();
+
+        if (appointmentError) throw appointmentError;
+
+        // Update employee queue status
+        await supabase
+          .from("employee_queue")
+          .update({
+            current_customer_id: appointment.id,
+            last_assignment_time: now.toISOString(),
+          })
+          .eq("id", selectedEmployee.id);
+
+        // Update current_position to track this appointment's position
+        await supabase
+          .from("daily_facility_queue")
+          .update({
+            current_position: selectedEmployee.position_in_queue,
+          })
+          .eq("id", dailyQueue.id);
+
+        // Check if this was the last available employee in the round
+        const remainingAvailable = employeesInRound.filter(
+          (emp) =>
+            emp.current_customer_id === null && emp.id !== selectedEmployee.id
+        );
+
+        if (remainingAvailable.length === 0) {
+          // All employees in current round are busy, start new round
+          const nextRound = dailyQueue.current_round + 1;
+
+          // For each employee in the current round, calculate their position in the next round
+          const positionUpdates = employeesInRound.map((emp, index) => ({
+            id: emp.id,
+            next_round_position: index + 1,
+            queue_round: nextRound,
+          }));
+
+          // Update daily queue to next round and reset position
+          await supabase
+            .from("daily_facility_queue")
+            .update({
+              current_round: nextRound,
+              current_position: 0, // Reset position for new round
+              initial_round_completed: true,
+            })
+            .eq("id", dailyQueue.id);
+
+          // Update all employees for next round
+          await Promise.all(
+            positionUpdates.map((update) =>
+              supabase
+                .from("employee_queue")
+                .update({
+                  queue_round: update.queue_round,
+                  position_in_queue: update.next_round_position,
+                })
+                .eq("id", update.id)
+            )
+          );
+        }
+
+        await supabase.rpc("commit_transaction");
+        return {
+          type: "IMMEDIATE_ASSIGNMENT",
+          data: appointment,
+        };
+      }
+
+      // No available employees, add customer to queue
+      const { data: queueEntry, error: queueError } = await supabase
+        .from("customer_queue")
+        .insert({
+          facility_id: facilityId,
+          customer_name: customerData.customer_name,
+          contact_info: customerData.contact_info,
+          service_id: customerData.service_id,
+          status: "waiting",
+        })
         .select()
         .single();
 
-      if (updateError) throw updateError;
-      nextPosition = updatedQueue.current_position;
+      if (queueError) throw queueError;
+
+      await supabase.rpc("commit_transaction");
+      return {
+        type: "ADDED_TO_QUEUE",
+        data: queueEntry,
+      };
+    } catch (error) {
+      await supabase.rpc("rollback_transaction");
+      throw error;
     }
-
-    // Add customer to queue with the next position
-    const { data: queueEntry, error: insertError } = await supabase
-      .from("customer_queue")
-      .insert([
-        {
-          ...customerData,
-          queue_position: nextPosition,
-          status: "waiting",
-        },
-      ])
-      .select()
-      .single();
-
-    if (insertError) throw insertError;
-
-    return {
-      type: "ADDED_TO_QUEUE",
-      data: queueEntry,
-      error: null,
-    };
   } catch (error) {
     console.error("Error processing customer:", error);
-    return {
-      type: "ERROR",
-      data: null,
-      error,
-    };
+    return { type: "ERROR", error };
   }
 };
 
-export const acceptCustomerCheckIn = async (appointmentId, employeeId) => {
-  try {
-    const now = new Date();
+// Helper function to initialize employee positions for a new round
+export const initializeEmployeePositions = async (facilityId) => {
+  const { data: employees } = await supabase
+    .from("employee_queue")
+    .select("*")
+    .eq("facility_id", facilityId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
 
-    // Get appointment details
-    const { data: appointment, error: fetchError } = await supabase
-      .from("appointments")
-      .select("*, services(duration)")
-      .eq("id", appointmentId)
-      .single();
-
-    if (fetchError) throw fetchError;
-
-    // Update appointment
-    const endTime = new Date(
-      now.getTime() + appointment.services.duration * 60 * 1000
+  if (employees?.length) {
+    await Promise.all(
+      employees.map((emp, index) =>
+        supabase
+          .from("employee_queue")
+          .update({
+            position_in_queue: index + 1,
+            queue_round: 1,
+            next_round_position: index + 1,
+          })
+          .eq("id", emp.id)
+      )
     );
-
-    const { data: updatedAppointment, error: updateError } = await supabase
-      .from("appointments")
-      .update({
-        employee_id: employeeId,
-        status: "in_progress",
-        start_time: now.toISOString(),
-        end_time: endTime.toISOString(),
-      })
-      .eq("id", appointmentId)
-      .select()
-      .single();
-
-    if (updateError) throw updateError;
-
-    // Update employee queue
-    const { error: queueError } = await supabase
-      .from("employee_queue")
-      .update({
-        current_customer_id: appointmentId,
-        last_assignment_time: now.toISOString(),
-      })
-      .eq("employee_id", employeeId)
-      .eq("is_active", true);
-
-    if (queueError) throw queueError;
-
-    return {
-      status: "SUCCESS",
-      data: updatedAppointment,
-      error: null,
-    };
-  } catch (error) {
-    console.error("Error accepting check-in:", error);
-    return {
-      status: "ERROR",
-      data: null,
-      error,
-    };
   }
 };
 
+/**
+ * Complete a customer appointment and check for next customer in queue
+ */
 export const finishCustomerAppointment = async (
   appointmentData,
   facilityId
 ) => {
   try {
     const now = new Date();
+    const today = now.toISOString().split("T")[0];
 
-    // Update current appointment as completed
-    const { data: completedAppointment, error: completionError } =
-      await supabase
+    // Start transaction
+    const client = await supabase.rpc("begin_transaction");
+
+    try {
+      // Get daily queue status first
+      const { data: dailyQueue } = await supabase
+        .from("daily_facility_queue")
+        .select("*")
+        .eq("facility_id", facilityId)
+        .eq("date", today)
+        .single();
+
+      // Get employee queue entry
+      const { data: employeeQueue } = await supabase
+        .from("employee_queue")
+        .select("*")
+        .eq("employee_id", appointmentData.employee_id)
+        .eq("is_active", true)
+        .single();
+
+      // Mark current appointment as completed
+      const { data: completedAppointment } = await supabase
         .from("appointments")
         .update({
           status: "completed",
           price: appointmentData.price,
           end_time: now.toISOString(),
-          updated_at: now.toISOString(),
         })
         .eq("id", appointmentData.id)
-        .select(
-          `
-        *,
-        services (id, name, duration),
-        employees (
-          id,
-          users (first_name, last_name)
-        )
-      `
-        )
+        .select()
         .single();
 
-    if (completionError) throw completionError;
+      // Check queue for next customer
+      const { data: nextCustomer } = await supabase
+        .from("customer_queue")
+        .select("*, services(duration)")
+        .eq("facility_id", facilityId)
+        .eq("status", "waiting")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .single();
 
-    // First check if employee is still active before assigning new customers
-    const { data: activeEmployees, error: activeCheckError } = await supabase
-      .from("employee_queue")
-      .select("id")
-      .eq("employee_id", completedAppointment.employee_id)
-      .eq("is_active", true);
+      if (nextCustomer) {
+        // Calculate end time based on service duration
+        const endTime = new Date(
+          now.getTime() + nextCustomer.services.duration * 60 * 1000
+        );
 
-    if (activeCheckError) throw activeCheckError;
+        // Create new appointment for waiting customer
+        const { data: newAppointment } = await supabase
+          .from("appointments")
+          .insert({
+            customer_name: nextCustomer.customer_name,
+            email: nextCustomer.contact_info.includes("@")
+              ? nextCustomer.contact_info
+              : null,
+            phone: !nextCustomer.contact_info.includes("@")
+              ? nextCustomer.contact_info
+              : null,
+            service_id: nextCustomer.service_id,
+            employee_id: completedAppointment.employee_id,
+            facility_id: facilityId,
+            start_time: now.toISOString(),
+            end_time: endTime.toISOString(),
+            status: "in_progress",
+            arrival_time: nextCustomer.created_at,
+          })
+          .select()
+          .single();
 
-    // Check if there are any active entries
-    if (!activeEmployees || activeEmployees.length === 0) {
-      // Employee is not active anymore, just complete the appointment without assigning new customers
-      return {
-        status: "COMPLETED",
-        completedAppointment,
-        nextAppointment: null,
-        error: null,
-      };
+        // Remove customer from queue
+        await supabase
+          .from("customer_queue")
+          .delete()
+          .eq("id", nextCustomer.id);
+
+        // Update employee queue with new customer
+        await supabase
+          .from("employee_queue")
+          .update({
+            current_customer_id: newAppointment.id,
+            last_assignment_time: now.toISOString(),
+          })
+          .eq("id", employeeQueue.id);
+
+        // Update current position in daily queue
+        await supabase
+          .from("daily_facility_queue")
+          .update({
+            current_position: employeeQueue.position_in_queue,
+          })
+          .eq("id", dailyQueue.id);
+
+        await supabase.rpc("commit_transaction");
+
+        return {
+          status: "NEXT_CUSTOMER_ASSIGNED",
+          completedAppointment,
+          nextAppointment: newAppointment,
+        };
+      } else {
+        // No waiting customers, update employee queue to show availability
+        await supabase
+          .from("employee_queue")
+          .update({
+            current_customer_id: null,
+            last_assignment_time: now.toISOString(),
+          })
+          .eq("id", employeeQueue.id);
+
+        // Get all employees in current round to check if round is complete
+        const { data: employeesInRound } = await supabase
+          .from("employee_queue")
+          .select("*")
+          .eq("facility_id", facilityId)
+          .eq("queue_round", dailyQueue.current_round)
+          .eq("is_active", true);
+
+        // Check if all employees in round are now free
+        const allEmployeesFree = employeesInRound?.every(
+          (emp) => emp.current_customer_id === null
+        );
+
+        if (allEmployeesFree) {
+          // Reset current_position to 0 when all employees are free
+          await supabase
+            .from("daily_facility_queue")
+            .update({
+              current_position: 0,
+            })
+            .eq("id", dailyQueue.id);
+        }
+
+        await supabase.rpc("commit_transaction");
+
+        return {
+          status: "COMPLETED",
+          completedAppointment,
+          nextAppointment: null,
+        };
+      }
+    } catch (error) {
+      await supabase.rpc("rollback_transaction");
+      throw error;
     }
+  } catch (error) {
+    console.error("Error finishing appointment:", error);
+    return { status: "ERROR", error };
+  }
+};
 
-    // Check for waiting customers
-    const { data: nextCustomer, error: queueError } = await supabase
-      .from("customer_queue")
-      .select(
-        `
-        *,
-        services (id, name, duration)
-      `
-      )
-      .eq("facility_id", facilityId)
-      .eq("status", "waiting")
-      .order("queue_position", { ascending: true })
-      .limit(1)
-      .single();
+// Add this function to src/utils/employeeAvailability.js
 
-    if (queueError && queueError.code !== "PGRST116") throw queueError;
+/**
+ * Accept and start a customer appointment after check-in
+ * @param {string} appointmentId - ID of the appointment to start
+ * @param {string} employeeQueueId - ID of the employee queue entry
+ * @param {string} facilityId - ID of the facility
+ */
+export const acceptCustomerCheckIn = async (
+  appointmentId,
+  employeeQueueId,
+  facilityId
+) => {
+  try {
+    const now = new Date();
+    const today = now.toISOString().split("T")[0];
 
-    if (nextCustomer) {
-      // Calculate end time for new appointment
-      const appointmentEndTime = new Date(
-        now.getTime() + nextCustomer.services.duration * 60 * 1000
-      );
+    // Start transaction
+    const client = await supabase.rpc("begin_transaction");
 
-      // Create new appointment for waiting customer
-      const { data: newAppointment, error: appointmentError } = await supabase
+    try {
+      // First check if employee is available
+      const { data: employeeQueue, error: employeeError } = await supabase
+        .from("employee_queue")
+        .select("*, employees(*)")
+        .eq("id", employeeQueueId)
+        .single();
+
+      if (employeeError) throw employeeError;
+
+      // Validate employee isn't already with a customer
+      if (employeeQueue.current_customer_id) {
+        throw new Error("Employee is already assigned to a customer");
+      }
+
+      // Get the appointment to validate and associate
+      const { data: appointment, error: appointmentError } = await supabase
         .from("appointments")
-        .insert({
-          customer_name: nextCustomer.customer_name,
-          email: nextCustomer.contact_info.includes("@")
-            ? nextCustomer.contact_info
-            : null,
-          phone: !nextCustomer.contact_info.includes("@")
-            ? nextCustomer.contact_info
-            : null,
-          service_id: nextCustomer.service_id,
-          employee_id: completedAppointment.employee_id,
-          facility_id: facilityId,
-          start_time: now.toISOString(),
-          end_time: appointmentEndTime.toISOString(),
-          status: "in_progress",
-          arrival_time: now.toISOString(),
-          created_at: now.toISOString(),
-          updated_at: now.toISOString(),
-        })
-        .select()
+        .select("*")
+        .eq("id", appointmentId)
         .single();
 
       if (appointmentError) throw appointmentError;
 
-      // Remove customer from queue
-      const { error: removeError } = await supabase
-        .from("customer_queue")
-        .delete()
-        .eq("id", nextCustomer.id);
+      // Validate appointment exists and isn't already in progress
+      if (!appointment) {
+        throw new Error("Appointment not found");
+      }
 
-      if (removeError) throw removeError;
+      if (appointment.status === "in_progress") {
+        throw new Error("Appointment is already in progress");
+      }
 
-      // Update employee queue status with new customer
-      const { error: queueUpdateError } = await supabase
+      // Validate appointment belongs to this employee
+      if (appointment.employee_id !== employeeQueue.employee_id) {
+        throw new Error("Appointment is assigned to different employee");
+      }
+
+      // Get daily queue status
+      const { data: dailyQueue } = await supabase
+        .from("daily_facility_queue")
+        .select("*")
+        .eq("facility_id", facilityId)
+        .eq("date", today)
+        .single();
+
+      // Update employee queue with new customer
+      const { error: updateQueueError } = await supabase
         .from("employee_queue")
         .update({
-          current_customer_id: newAppointment.id,
+          current_customer_id: appointmentId,
           last_assignment_time: now.toISOString(),
         })
-        .eq("employee_id", completedAppointment.employee_id)
-        .eq("is_active", true);
+        .eq("id", employeeQueueId)
+        .select()
+        .single();
 
-      if (queueUpdateError) throw queueUpdateError;
+      if (updateQueueError) throw updateQueueError;
+
+      // Update appointment status to in_progress
+      const { data: updatedAppointment, error: updateAppointmentError } =
+        await supabase
+          .from("appointments")
+          .update({
+            status: "in_progress",
+            start_time: now.toISOString(),
+          })
+          .eq("id", appointmentId)
+          .select(
+            `
+          *,
+          services (
+            name,
+            duration
+          ),
+          employees (
+            id,
+            users (
+              first_name,
+              last_name
+            )
+          )
+        `
+          )
+          .single();
+
+      if (updateAppointmentError) throw updateAppointmentError;
+
+      // Update current position in daily queue if we're tracking positions
+      if (dailyQueue && employeeQueue.position_in_queue) {
+        await supabase
+          .from("daily_facility_queue")
+          .update({
+            current_position: employeeQueue.position_in_queue,
+          })
+          .eq("id", dailyQueue.id);
+      }
+
+      await supabase.rpc("commit_transaction");
 
       return {
-        status: "NEXT_CUSTOMER_ASSIGNED",
-        completedAppointment,
-        nextAppointment: newAppointment,
+        status: "STARTED",
+        data: {
+          appointment: updatedAppointment,
+          employeeQueue,
+          message: "Appointment started successfully",
+        },
         error: null,
       };
-    } else {
-      // No waiting customers, just update employee queue status
-      const { error: queueUpdateError } = await supabase
-        .from("employee_queue")
-        .update({
-          current_customer_id: null,
-          last_assignment_time: now.toISOString(),
-        })
-        .eq("employee_id", completedAppointment.employee_id)
-        .eq("is_active", true);
-
-      if (queueUpdateError) throw queueUpdateError;
-
-      return {
-        status: "COMPLETED",
-        completedAppointment,
-        nextAppointment: null,
-        error: null,
-      };
+    } catch (error) {
+      await supabase.rpc("rollback_transaction");
+      throw error;
     }
   } catch (error) {
-    console.error("Error finishing appointment:", error);
+    console.error("Error accepting customer check-in:", error);
     return {
       status: "ERROR",
-      completedAppointment: null,
-      nextAppointment: null,
-      error,
+      data: null,
+      error: error.message || "Failed to start appointment",
     };
   }
 };
 
-// Optional: Add a function to check appointment status
-export const getAppointmentStatus = async (appointmentId) => {
+export const getNextQueueEmployee = async (facilityId) => {
   try {
-    const { data, error } = await supabase
-      .from("appointments")
+    const today = new Date().toISOString().split("T")[0];
+
+    // First get the daily queue status
+    const { data: dailyQueue } = await supabase
+      .from("daily_facility_queue")
+      .select("*")
+      .eq("facility_id", facilityId)
+      .eq("date", today)
+      .single();
+
+    if (!dailyQueue) {
+      // If no daily queue exists, we would get the first employee in round 1
+      const { data: firstEmployee } = await supabase
+        .from("employee_queue")
+        .select(
+          `
+          *,
+          employees!inner (
+            id,
+            table_number,
+            users!inner (
+              first_name,
+              last_name
+            )
+          )
+        `
+        )
+        .eq("facility_id", facilityId)
+        .eq("is_active", true)
+        .eq("queue_round", 1)
+        .order("position_in_queue", { ascending: true })
+        .limit(1)
+        .single();
+
+      return { data: firstEmployee, error: null };
+    }
+
+    // Get next available employee in current round
+    const { data: nextInRound } = await supabase
+      .from("employee_queue")
       .select(
         `
         *,
-        services (name, duration),
-        employees (
-          users (first_name, last_name)
+        employees!inner (
+          id,
+          table_number,
+          users!inner (
+            first_name,
+            last_name
+          )
         )
       `
       )
-      .eq("id", appointmentId)
+      .eq("facility_id", facilityId)
+      .eq("is_active", true)
+      .eq("queue_round", dailyQueue.current_round)
+      .is("current_customer_id", null)
+      .order("position_in_queue", { ascending: true })
+      .limit(1)
       .single();
 
-    if (error) throw error;
-
-    const now = new Date();
-    const startTime = new Date(data.start_time);
-    const endTime = new Date(data.end_time);
-
-    let status = {
-      code: "SCHEDULED",
-      isActive: false,
-      timeRemaining: 0,
-    };
-
-    if (now < startTime) {
-      status.code = "SCHEDULED";
-      status.timeRemaining = (startTime - now) / 1000; // in seconds
-    } else if (now >= startTime && now <= endTime) {
-      status.code = "IN_PROGRESS";
-      status.isActive = true;
-      status.timeRemaining = (endTime - now) / 1000; // in seconds
-    } else {
-      status.code = "OVERTIME";
-      status.timeRemaining = (now - endTime) / 1000; // seconds overtime
+    if (nextInRound) {
+      return { data: nextInRound, error: null };
     }
 
-    return { data: { ...data, status }, error: null };
+    // If no one available in current round, look for next round
+    const { data: nextRoundEmployee } = await supabase
+      .from("employee_queue")
+      .select(
+        `
+        *,
+        employees!inner (
+          id,
+          table_number,
+          users!inner (
+            first_name,
+            last_name
+          )
+        )
+      `
+      )
+      .eq("facility_id", facilityId)
+      .eq("is_active", true)
+      .eq("queue_round", dailyQueue.current_round + 1)
+      .is("current_customer_id", null)
+      .order("next_round_position", { ascending: true })
+      .limit(1)
+      .single();
+
+    return { data: nextRoundEmployee, error: null };
   } catch (error) {
-    console.error("Error checking appointment status:", error);
+    console.error("Error getting next queue employee:", error);
     return { data: null, error };
   }
 };

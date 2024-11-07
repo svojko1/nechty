@@ -108,7 +108,7 @@ const StatisticsGrid = ({ stats }) => {
       <StatCard
         icon={Star}
         title="Hodnotenie"
-        value={stats.rating > 0 ? `${stats.rating}/5` : "Bez hodnotenia"}
+        value={stats.rating > 0 ? `${stats.rating}/5` : "-"}
         gradientColors="from-yellow-500 to-amber-600"
       />
 
