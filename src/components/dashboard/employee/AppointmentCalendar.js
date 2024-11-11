@@ -1,9 +1,10 @@
 // src/components/dashboard/employee/AppointmentCalendar.js
 import React from "react";
 import { format, subMonths, addMonths, parseISO, isSameDay } from "date-fns";
-import { sk } from "date-fns/locale";
+import { sk, vi } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Clock, User } from "lucide-react";
 import { motion } from "framer-motion";
+import { useLanguage } from "src/components/contexts/LanguageContext";
 
 import { Calendar } from "src/components/ui/calendar";
 import { Button } from "src/components/ui/button";
@@ -22,11 +23,13 @@ const AppointmentsList = ({
   appointments,
   onFinishAppointment,
   getClientDisplay,
+  dateLocale,
+  t,
 }) => {
   if (!appointments?.length) {
     return (
       <p className="text-gray-500 italic text-center py-4">
-        Žiadne rezervácie na tento deň.
+        {t("calendar.noAppointments")}
       </p>
     );
   }
@@ -35,17 +38,19 @@ const AppointmentsList = ({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Čas</TableHead>
-          <TableHead>Klient</TableHead>
-          <TableHead>Služba</TableHead>
-          <TableHead>Akcia</TableHead>
+          <TableHead>{t("calendar.time")}</TableHead>
+          <TableHead>{t("dashboard.client")}</TableHead>
+          <TableHead>{t("dashboard.service")}</TableHead>
+          <TableHead>{t("calendar.action")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {appointments.map((appointment) => (
           <TableRow key={appointment.id}>
             <TableCell className="font-medium">
-              {format(parseISO(appointment.start_time), "HH:mm")}
+              {format(parseISO(appointment.start_time), "HH:mm", {
+                locale: dateLocale,
+              })}
             </TableCell>
             <TableCell>{getClientDisplay(appointment)}</TableCell>
             <TableCell>
@@ -57,7 +62,9 @@ const AppointmentsList = ({
                 className="bg-green-500 hover:bg-green-600 text-white"
                 disabled={appointment.status === "completed"}
               >
-                {appointment.status === "completed" ? "Completed" : "Finish"}
+                {appointment.status === "completed"
+                  ? t("calendar.completed")
+                  : t("calendar.finish")}
               </Button>
             </TableCell>
           </TableRow>
@@ -78,6 +85,9 @@ const AppointmentCalendar = ({
   getClientDisplay,
   handleFinishAppointment,
 }) => {
+  const { currentLanguage, t } = useLanguage();
+  const dateLocale = currentLanguage === "vi" ? vi : sk;
+
   // Filter appointments for selected date
   const filteredAppointments = appointments.filter((appointment) =>
     isSameDay(parseISO(appointment.start_time), selectedDate)
@@ -98,7 +108,7 @@ const AppointmentCalendar = ({
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="font-medium text-lg">
-                {format(currentMonth, "MMMM yyyy", { locale: sk })}
+                {format(currentMonth, "MMMM yyyy", { locale: dateLocale })}
               </span>
               <Button
                 variant="outline"
@@ -128,6 +138,7 @@ const AppointmentCalendar = ({
                 }}
                 month={currentMonth}
                 onMonthChange={onMonthChange}
+                locale={dateLocale}
               />
             </motion.div>
           </div>
@@ -136,11 +147,14 @@ const AppointmentCalendar = ({
           <div className="flex-grow">
             <div className="mb-4">
               <h3 className="text-xl font-semibold">
-                Rozvrh na {format(selectedDate, "d. MMMM yyyy", { locale: sk })}
+                {t("calendar.scheduleFor")}{" "}
+                {format(selectedDate, "d. MMMM yyyy", { locale: dateLocale })}
               </h3>
               <div className="flex items-center text-sm text-gray-500 mt-1">
                 <Clock className="mr-1 h-4 w-4" />
-                <span>{filteredAppointments.length} rezervácií</span>
+                <span>
+                  {filteredAppointments.length} {t("calendar.appointments")}
+                </span>
               </div>
             </div>
 
@@ -159,6 +173,8 @@ const AppointmentCalendar = ({
                   appointments={filteredAppointments}
                   onFinishAppointment={handleFinishAppointment}
                   getClientDisplay={getClientDisplay}
+                  dateLocale={dateLocale}
+                  t={t}
                 />
               </motion.div>
             )}

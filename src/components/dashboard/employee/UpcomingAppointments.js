@@ -4,6 +4,8 @@ import { format, parseISO } from "date-fns";
 import { CalendarClock, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "src/lib/utils";
+import { useLanguage } from "src/components/contexts/LanguageContext";
+import { sk, vi } from "date-fns/locale";
 
 import {
   Card,
@@ -26,6 +28,9 @@ const UpcomingAppointments = ({
   isLoading,
   getClientDisplay,
 }) => {
+  const { currentLanguage, t } = useLanguage();
+  const dateLocale = currentLanguage === "vi" ? vi : sk;
+
   // Sort and filter only upcoming appointments
   const upcomingAppointments = appointments
     .filter((app) => new Date(app.start_time) > new Date())
@@ -37,7 +42,7 @@ const UpcomingAppointments = ({
       <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white p-6">
         <CardTitle className="text-2xl font-bold flex items-center">
           <CalendarClock className="mr-2" />
-          Nadchádzajúce rezervácie
+          {t("dashboard.nextAppointment")}
         </CardTitle>
       </CardHeader>
 
@@ -55,23 +60,27 @@ const UpcomingAppointments = ({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Dátum</TableHead>
-                  <TableHead>Čas</TableHead>
-                  <TableHead>Klient</TableHead>
-                  <TableHead>Služba</TableHead>
-                  <TableHead>Stav</TableHead>
+                  <TableHead>{t("dashboard.time")}</TableHead>
+                  <TableHead>{t("dashboard.time")}</TableHead>
+                  <TableHead>{t("dashboard.client")}</TableHead>
+                  <TableHead>{t("dashboard.service")}</TableHead>
+                  <TableHead>{t("dashboard.status")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {upcomingAppointments.map((appointment) => (
                   <TableRow key={appointment.id}>
                     <TableCell>
-                      {format(parseISO(appointment.start_time), "dd.MM.yyyy")}
+                      {format(parseISO(appointment.start_time), "dd.MM.yyyy", {
+                        locale: dateLocale,
+                      })}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <div className="flex items-center text-gray-600">
                         <Clock className="mr-2 h-4 w-4" />
-                        {format(parseISO(appointment.start_time), "HH:mm")}
+                        {format(parseISO(appointment.start_time), "HH:mm", {
+                          locale: dateLocale,
+                        })}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -100,7 +109,7 @@ const UpcomingAppointments = ({
                             appointment.status === "in_progress",
                         })}
                       >
-                        {getStatusText(appointment.status)}
+                        {t(`status.${appointment.status}`)}
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -110,24 +119,14 @@ const UpcomingAppointments = ({
           </motion.div>
         ) : (
           <div className="text-center py-8 text-gray-500">
-            <p className="text-lg">Žiadne nadchádzajúce rezervácie.</p>
+            <p className="text-lg">
+              {t("currentAppointment.noActiveAppointment")}
+            </p>
           </div>
         )}
       </CardContent>
     </Card>
   );
-};
-
-// Helper function to get status text in Slovak
-const getStatusText = (status) => {
-  const statusMap = {
-    scheduled: "Plánované",
-    confirmed: "Potvrdené",
-    in_progress: "Prebieha",
-    completed: "Dokončené",
-    cancelled: "Zrušené",
-  };
-  return statusMap[status] || status;
 };
 
 export default UpcomingAppointments;

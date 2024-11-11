@@ -11,6 +11,8 @@ import {
   Minimize2,
   UserCheck,
 } from "lucide-react";
+import { sk, vi } from "date-fns/locale";
+import { useLanguage } from "src/components/contexts/LanguageContext";
 
 // UI Components
 import { Card, CardContent } from "src/components/ui/card";
@@ -40,17 +42,21 @@ const APPOINTMENT_STATUS = {
 };
 
 const NextAppointmentCard = ({ appointment }) => {
+  const { currentLanguage, t } = useLanguage();
+  const dateLocale = currentLanguage === "vi" ? vi : sk;
   if (!appointment) return null;
 
   return (
     <div className="mt-6">
       <div className="text-blue-600 text-sm font-medium mb-2">
-        Nasledujúca rezervácia
+        {t("timer.nextAppointment")}
       </div>
       <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
         <div className="flex items-center justify-center mb-1">
           <span className="text-gray-600 text-sm">
-            {format(new Date(appointment.start_time), "HH:mm")}
+            {format(new Date(appointment.start_time), "HH:mm", {
+              locale: dateLocale,
+            })}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -60,30 +66,6 @@ const NextAppointmentCard = ({ appointment }) => {
             </h4>
             <p className="text-gray-500 text-sm">{appointment.customer_name}</p>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const UpcomingAppointmentCard = ({ appointment }) => {
-  if (!appointment) return null;
-
-  return (
-    <div className="mt-4 p-4 bg-pink-50 rounded-lg border border-pink-100">
-      <div className="flex items-center justify-between mb-2">
-        <h4 className="text-sm font-medium text-pink-700">
-          Nadchádzajúca rezervácia
-        </h4>
-        <Badge variant="outline" className="bg-pink-100">
-          {format(new Date(appointment.start_time), "HH:mm")}
-        </Badge>
-      </div>
-      <div className="space-y-2">
-        <p className="text-pink-800 font-medium">{appointment.customer_name}</p>
-        <div className="flex items-center text-sm text-pink-600">
-          <Clock className="w-4 h-4 mr-1" />
-          <span>{appointment.services?.name}</span>
         </div>
       </div>
     </div>
@@ -107,6 +89,9 @@ const EnhancedAppointmentTimer = ({
   const [isConfirmationDialogOpen, setIsConfirmationDialogOpen] =
     useState(false);
   const [price, setPrice] = useState("");
+
+  const { t, currentLanguage } = useLanguage();
+  const dateLocale = currentLanguage === "vi" ? vi : sk;
 
   // Add this after the state declarations
   const updateStatus = (appointment) => {
@@ -430,11 +415,11 @@ const EnhancedAppointmentTimer = ({
 
   const getStatusText = () => {
     const statusTexts = {
-      [APPOINTMENT_STATUS.UPCOMING]: "Nadchádzajúca rezervácia",
-      [APPOINTMENT_STATUS.IN_PROGRESS]: "Prebiehajúca rezervácia",
-      [APPOINTMENT_STATUS.OVERTIME]: "Prekročený čas",
-      [APPOINTMENT_STATUS.OVERDUE]: "Výrazne prekročený čas",
-      [APPOINTMENT_STATUS.WAITING]: "Čakajte na ďalšieho zákazníka",
+      [APPOINTMENT_STATUS.UPCOMING]: t("timer.status.upcoming"),
+      [APPOINTMENT_STATUS.IN_PROGRESS]: t("timer.status.inProgress"),
+      [APPOINTMENT_STATUS.OVERTIME]: t("timer.status.overtime"),
+      [APPOINTMENT_STATUS.OVERDUE]: t("timer.status.overdue"),
+      [APPOINTMENT_STATUS.WAITING]: t("timer.status.waiting"),
     };
     return statusTexts[status] || "";
   };
@@ -450,8 +435,8 @@ const EnhancedAppointmentTimer = ({
 
     const start = new Date(currentAppointment.start_time);
     const appointmentDate = isToday(start)
-      ? "Dnes"
-      : format(start, "dd.MM.yyyy");
+      ? t("currentAppointment.today")
+      : format(start, "dd.MM.yyyy", { locale: dateLocale });
 
     return (
       <div className="flex flex-col mt-2">
@@ -462,12 +447,12 @@ const EnhancedAppointmentTimer = ({
           </div>
           <Badge variant="outline" className={getStatusColor()}>
             {status === APPOINTMENT_STATUS.UPCOMING
-              ? "Čaká sa"
+              ? t("timer.status.waiting")
               : status === APPOINTMENT_STATUS.IN_PROGRESS
-              ? "Prebieha"
+              ? t("timer.status.inProgress")
               : status === APPOINTMENT_STATUS.WAITING
-              ? "Čaká sa"
-              : "Prekročené"}
+              ? t("timer.status.waiting")
+              : t("timer.status.overtime")}
           </Badge>
         </div>
         <div className="flex items-center justify-between mt-1">
@@ -502,10 +487,10 @@ const EnhancedAppointmentTimer = ({
       <div className={`text-center mt-2 ${timerContainerClasses}`}>
         <p className="text-sm font-medium">
           {status === APPOINTMENT_STATUS.IN_PROGRESS
-            ? "Zostáva"
+            ? t("timer.remaining")
             : status === APPOINTMENT_STATUS.UPCOMING
-            ? "Začína za"
-            : "Prekročené o"}
+            ? t("timer.startsIn")
+            : t("timer.overtime")}
         </p>
         <p className={timerClasses}>
           {status !== APPOINTMENT_STATUS.IN_PROGRESS &&
@@ -569,7 +554,7 @@ const EnhancedAppointmentTimer = ({
                 onClick={() => setIsFinishDialogOpen(true)}
                 className="w-full max-w-xs bg-green-500 hover:bg-green-600 text-white py-4 text-lg rounded-full"
               >
-                Ukončiť rezerváciu
+                {t("timer.finishAppointment")}
               </Button>
             </div>
           )}
@@ -587,11 +572,12 @@ const EnhancedAppointmentTimer = ({
                   }`}
                 >
                   {nextAppointment.arrival_time
-                    ? `Zákazník prišiel: ${format(
+                    ? `${t("timer.customerArrived")}: ${format(
                         new Date(nextAppointment.arrival_time),
-                        "HH:mm"
+                        "HH:mm",
+                        { locale: dateLocale }
                       )}`
-                    : "Čaká sa na príchod zákazníka"}
+                    : t("timer.waitingForCustomer")}
                 </Badge>
               </div>
               {/* Action Button */}
@@ -602,8 +588,8 @@ const EnhancedAppointmentTimer = ({
                 >
                   <UserCheck className="w-5 h-5 mr-2" />
                   {nextAppointment.arrival_time
-                    ? "Start Next Appointment"
-                    : "Check-in Next Customer"}
+                    ? t("timer.startNext")
+                    : t("timer.checkInNext")}
                 </Button>
               )}
             </div>
@@ -618,9 +604,9 @@ const EnhancedAppointmentTimer = ({
       <Dialog open={isFinishDialogOpen} onOpenChange={setIsFinishDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Ukončiť rezerváciu</DialogTitle>
+            <DialogTitle>{t("timer.dialog.finishTitle")}</DialogTitle>
             <DialogDescription>
-              Zadajte konečnú cenu za službu.
+              {t("timer.dialog.enterPrice")}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -628,7 +614,7 @@ const EnhancedAppointmentTimer = ({
               type="number"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              placeholder="Zadajte cenu"
+              placeholder={t("timer.dialog.pricePlaceholder")}
               className="text-lg py-6"
             />
           </div>
@@ -637,7 +623,7 @@ const EnhancedAppointmentTimer = ({
               onClick={() => setIsFinishDialogOpen(false)}
               variant="outline"
             >
-              Zrušiť
+              {t("timer.dialog.cancel")}
             </Button>
             <Button
               onClick={() => {
@@ -646,7 +632,7 @@ const EnhancedAppointmentTimer = ({
               }}
               className="bg-green-500 hover:bg-green-600 text-white"
             >
-              Potvrdiť
+              {t("timer.dialog.confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -658,26 +644,28 @@ const EnhancedAppointmentTimer = ({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Potvrdiť ukončenie rezervácie</DialogTitle>
+            <DialogTitle>{t("timer.confirmDialog.title")}</DialogTitle>
             <DialogDescription>
-              Ste si istý, že chcete ukončiť túto rezerváciu?
+              {t("timer.confirmDialog.message")}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-lg font-semibold">Cena: {price} €</p>
+            <p className="text-lg font-semibold">
+              {t("timer.confirmDialog.price")}: {price} €
+            </p>{" "}
           </div>
           <DialogFooter>
             <Button
               onClick={() => setIsConfirmationDialogOpen(false)}
               variant="outline"
             >
-              Zrušiť
+              {t("timer.confirmDialog.cancel")}
             </Button>
             <Button
               onClick={handleConfirmFinish}
               className="bg-green-500 hover:bg-green-600 text-white"
             >
-              Potvrdiť ukončenie
+              {t("timer.confirmDialog.confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>

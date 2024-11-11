@@ -17,6 +17,8 @@ import {
   handleEmployeeCheckOut,
 } from "src/utils/employeeAvailability";
 import UpcomingAppointments from "src/components/dashboard/employee/UpcomingAppointments";
+import { useLanguage } from "src/components/contexts/LanguageContext";
+import LanguageSwitcher from "src/components/dashboard/employee/LanguageSwitcher";
 
 const EmployeeDashboard = ({ session }) => {
   // State Management
@@ -42,6 +44,7 @@ const EmployeeDashboard = ({ session }) => {
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [queueId, setQueueId] = useState(null);
   const [checkInTime, setCheckInTime] = useState(null);
+  const { t } = useLanguage();
 
   const getCurrentAndNextAppointment = (appointmentsList) => {
     const now = new Date();
@@ -546,8 +549,10 @@ const EmployeeDashboard = ({ session }) => {
       <CardContent className="p-6 space-y-8">
         <div className="p-6 min-h-screen">
           <h1 className="text-3xl font-bold text-gray-800 mb-6">
-            Dashboard zamestnanca
+            {t("dashboard.title")}
           </h1>
+
+          <LanguageSwitcher />
 
           {!isApproved && (
             <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">

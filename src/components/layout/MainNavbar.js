@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-
 import { supabase } from "src/supabaseClient";
 import {
   Sparkles,
@@ -19,7 +18,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ScrollArea } from "src/components/ui/scroll-area";
 import { cn } from "src/lib/utils";
 
-// UI Components
 import { Button } from "src/components/ui/button";
 import {
   NavigationMenu,
@@ -78,7 +76,6 @@ const MainNavbar = ({ session, handleLogout }) => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Effect to fetch user role from public users table
   useEffect(() => {
     const fetchUserRole = async () => {
       if (session?.user?.id) {
@@ -102,18 +99,12 @@ const MainNavbar = ({ session, handleLogout }) => {
     fetchUserRole();
   }, [session]);
 
-  // If in kiosk mode, don't render the navbar
   if (isKiosk) return null;
 
   const headerClass = scrollY > 50 ? "py-4 shadow-lg" : "py-4";
 
-  // Define all possible navigation items
-  const publicNavigationItems = [
-    { to: "/", label: "Rezervácie", icon: Calendar },
-    { to: "/checkin", label: "Check-in", icon: UserCheck },
-  ];
-
-  // In MainNavbar.js, modify the getNavigationItems function:
+  // Only show login button when no session exists
+  const publicNavigationItems = [];
 
   const getNavigationItems = () => {
     if (!session) {
@@ -127,17 +118,22 @@ const MainNavbar = ({ session, handleLogout }) => {
         return [{ to: "/reception", label: "Recepcia", icon: Inbox }];
       case "admin":
         return [
-          // Remove public and other navigation items for admin
           { to: "/manazer", label: "Manažér", icon: BarChart },
           { to: "/admin", label: "Admin", icon: Settings },
         ];
       case "manager":
         return [
-          ...publicNavigationItems,
+          { to: "/", label: "Rezervácie", icon: Calendar },
+          { to: "/checkin", label: "Check-in", icon: UserCheck },
           { to: "/manazer", label: "Manažér", icon: BarChart },
         ];
       default:
-        return publicNavigationItems;
+        return session
+          ? [
+              { to: "/", label: "Rezervácie", icon: Calendar },
+              { to: "/checkin", label: "Check-in", icon: UserCheck },
+            ]
+          : [];
     }
   };
 
@@ -161,7 +157,6 @@ const MainNavbar = ({ session, handleLogout }) => {
           <div className="hidden md:flex space-x-4 items-center">
             <NavigationMenu>
               <NavigationMenuList>
-                {/* Navigation items based on role */}
                 {navigationItems.map((item) => (
                   <NavigationMenuItem key={item.to}>
                     <NavLink to={item.to} icon={item.icon}>
@@ -170,7 +165,7 @@ const MainNavbar = ({ session, handleLogout }) => {
                   </NavigationMenuItem>
                 ))}
 
-                {/* Login/Logout button - always show */}
+                {/* Login/Logout button */}
                 <NavigationMenuItem>
                   {session ? (
                     <div className="flex items-center gap-4 pl-4">
@@ -183,9 +178,8 @@ const MainNavbar = ({ session, handleLogout }) => {
                       </Button>
                     </div>
                   ) : (
-                    <NavLink to="/login" icon={LogIn}>
-                      Prihlásenie
-                    </NavLink>
+                    //empty div
+                    <div></div>
                   )}
                 </NavigationMenuItem>
               </NavigationMenuList>
@@ -215,7 +209,6 @@ const MainNavbar = ({ session, handleLogout }) => {
             <ScrollArea className="h-[300px]">
               <nav className="container mx-auto px-4 py-4">
                 <ul className="space-y-2">
-                  {/* Navigation items based on role */}
                   {navigationItems.map((item) => (
                     <li key={item.to}>
                       <NavLink
@@ -228,7 +221,7 @@ const MainNavbar = ({ session, handleLogout }) => {
                     </li>
                   ))}
 
-                  {/* Login/Logout button - always show */}
+                  {/* Login/Logout button */}
                   <li>
                     {session ? (
                       <>

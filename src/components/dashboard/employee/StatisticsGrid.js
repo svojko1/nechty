@@ -2,6 +2,8 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Euro, Star, Users, Briefcase, Calendar } from "lucide-react";
 import { Card, CardContent } from "src/components/ui/card";
+import { useLanguage } from "src/components/contexts/LanguageContext";
+import { sk, vi } from "date-fns/locale";
 
 const StatCard = ({
   icon: Icon,
@@ -53,9 +55,11 @@ const StatCard = ({
 };
 
 const StatisticsGrid = ({ stats }) => {
-  // Format currency with Euro symbol
+  const { currentLanguage, t } = useLanguage();
+
+  // Format currency with Euro symbol based on locale
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("sk-SK", {
+    return new Intl.NumberFormat(currentLanguage === "vi" ? "vi-VN" : "sk-SK", {
       style: "currency",
       currency: "EUR",
       minimumFractionDigits: 2,
@@ -90,7 +94,7 @@ const StatisticsGrid = ({ stats }) => {
       {/* Monthly Earnings Card */}
       <StatCard
         icon={Euro}
-        title="Mesačný zárobok"
+        title={t("dashboard.monthlyEarnings")}
         value={formatCurrency(stats.monthlyEarnings)}
         trend={stats.earningsTrend}
         gradientColors="from-green-500 to-emerald-600"
@@ -99,7 +103,7 @@ const StatisticsGrid = ({ stats }) => {
       {/* Daily Earnings Card */}
       <StatCard
         icon={Calendar}
-        title="Dnešný zárobok"
+        title={t("dashboard.dailyEarnings")}
         value={formatCurrency(stats.dailyEarnings)}
         gradientColors="from-blue-500 to-indigo-600"
       />
@@ -107,7 +111,7 @@ const StatisticsGrid = ({ stats }) => {
       {/* Rating Card */}
       <StatCard
         icon={Star}
-        title="Hodnotenie"
+        title={t("dashboard.rating")}
         value={stats.rating > 0 ? `${stats.rating}/5` : "-"}
         gradientColors="from-yellow-500 to-amber-600"
       />
@@ -115,7 +119,7 @@ const StatisticsGrid = ({ stats }) => {
       {/* Appointments Card */}
       <StatCard
         icon={Users}
-        title="Počet rezervácií"
+        title={t("dashboard.appointmentsCount")}
         value={stats.totalAppointments}
         gradientColors="from-purple-500 to-indigo-600"
       />
@@ -123,7 +127,7 @@ const StatisticsGrid = ({ stats }) => {
       {/* Monthly Goal Card */}
       <StatCard
         icon={Briefcase}
-        title="Mesačný cieľ"
+        title={t("dashboard.monthlyGoal")}
         value={`${Math.round(goalProgress)}%`}
         gradientColors="from-pink-500 to-purple-600"
       />

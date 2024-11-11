@@ -27,6 +27,7 @@ import MainNavbar from "src/components/layout/MainNavbar";
 import ReceptionDashboard from "src/components/dashboard/ReceptionDashboard";
 import { FacilityProvider, useFacility } from "src/FacilityContext";
 import FacilitySelector from "src/components/facility/FacilitySelector";
+import { LanguageProvider } from "./components/contexts/LanguageContext";
 
 // Navigation Controls Component
 const NavigationControls = () => {
@@ -67,17 +68,31 @@ const NavigationControls = () => {
   return null;
 };
 
-// KioskRedirect component
+// In App.js, modify the KioskRedirect component
 const KioskRedirect = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    const isKiosk = localStorage.getItem("kiosk-mode") === "true";
-    if (isKiosk && location.pathname !== "/checkin") {
+    const searchParams = new URLSearchParams(location.search);
+    const kioskParam = searchParams.get("kiosk");
+    const storedKioskMode = localStorage.getItem("kiosk-mode") === "true";
+
+    // If kiosk parameter is explicitly set to false, update localStorage
+    if (kioskParam === "false") {
+      localStorage.setItem("kiosk-mode", "false");
+      return; // Don't redirect
+    }
+
+    // Only redirect if in kiosk mode and no explicit kiosk parameter
+    if (
+      storedKioskMode &&
+      kioskParam !== "false" &&
+      location.pathname !== "/checkin"
+    ) {
       navigate("/checkin");
     }
-  }, []);
+  }, [location, navigate]);
 
   return null;
 };
@@ -237,85 +252,91 @@ function App() {
 
   return (
     <FacilityProvider>
-      <Router>
-        <KioskRedirect />
-        <Layout
-          session={session}
-          userRole={userRole}
-          handleLogout={handleLogout}
-        >
-          <KioskRouteGuard>
-            <Routes>
-              {userRole === "reception" ? (
-                <>
-                  <Route path="/reception" element={<ReceptionDashboard />} />
-                  <Route
-                    path="*"
-                    element={<Navigate to="/reception" replace />}
-                  />
-                </>
-              ) : userRole === "employee" ? (
-                <>
-                  <Route
-                    path="/zamestnanec"
-                    element={<EmployeeDashboard session={session} />}
-                  />
-                  <Route
-                    path="*"
-                    element={<Navigate to="/zamestnanec" replace />}
-                  />
-                </>
-              ) : (
-                <>
-                  <Route path="/" element={<BookingSystemWrapper />} />
-                  <Route path="/checkin" element={<CheckIn />} />
-                  <Route
-                    path="/feedback/:appointmentId"
-                    element={<FeedbackPage />}
-                  />
-                  {session && (
-                    <>
-                      {userRole === "employee" && (
-                        <Route
-                          path="/zamestnanec"
-                          element={<EmployeeDashboard session={session} />}
-                        />
-                      )}
-                      {userRole === "manager" && (
-                        <Route path="/manazer" element={<ManagerDashboard />} />
-                      )}
-                      {userRole === "admin" && (
-                        <>
+      <LanguageProvider>
+        <Router>
+          <KioskRedirect />
+          <Layout
+            session={session}
+            userRole={userRole}
+            handleLogout={handleLogout}
+          >
+            <KioskRouteGuard>
+              <Routes>
+                {userRole === "reception" ? (
+                  <>
+                    <Route path="/reception" element={<ReceptionDashboard />} />
+                    <Route
+                      path="*"
+                      element={<Navigate to="/reception" replace />}
+                    />
+                  </>
+                ) : userRole === "employee" ? (
+                  <>
+                    <Route
+                      path="/zamestnanec"
+                      element={<EmployeeDashboard session={session} />}
+                    />
+
+                    <Route
+                      path="*"
+                      element={<Navigate to="/zamestnanec" replace />}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Route path="/" element={<BookingSystemWrapper />} />
+                    <Route path="/checkin" element={<CheckIn />} />
+                    <Route
+                      path="/feedback/:appointmentId"
+                      element={<FeedbackPage />}
+                    />
+                    {session && (
+                      <>
+                        {userRole === "employee" && (
                           <Route
                             path="/zamestnanec"
                             element={<EmployeeDashboard session={session} />}
                           />
+                        )}
+                        {userRole === "manager" && (
                           <Route
                             path="/manazer"
                             element={<ManagerDashboard />}
                           />
-                          <Route
-                            path="/reception"
-                            element={<ReceptionDashboard />}
-                          />
-                          <Route path="/admin" element={<AdminDashboard />} />
-                        </>
-                      )}
-                    </>
-                  )}
-                  {!session && (
-                    <Route
-                      path="/login"
-                      element={<AuthForm setSession={setSession} />}
-                    />
-                  )}
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </>
-              )}
-            </Routes>
-          </KioskRouteGuard>
-        </Layout>
-      </Router>
+                        )}
+                        {userRole === "admin" && (
+                          <>
+                            <Route
+                              path="/zamestnanec"
+                              element={<EmployeeDashboard session={session} />}
+                            />
+                            <Route
+                              path="/manazer"
+                              element={<ManagerDashboard />}
+                            />
+                            <Route
+                              path="/reception"
+                              element={<ReceptionDashboard />}
+                            />
+                            <Route path="/admin" element={<AdminDashboard />} />
+                          </>
+                        )}
+                      </>
+                    )}
+                    {!session && (
+                      <Route
+                        path="/login"
+                        element={<AuthForm setSession={setSession} />}
+                      />
+                    )}
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </>
+                )}
+              </Routes>
+            </KioskRouteGuard>
+          </Layout>
+        </Router>
+      </LanguageProvider>
     </FacilityProvider>
   );
 }
