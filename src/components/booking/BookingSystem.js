@@ -342,9 +342,14 @@ function BookingSystem({ facilityId }) {
 
       setBookingComplete(true);
       toast.success("Rezervácia bola úspešne vytvorená!");
+
+      const isKiosk = localStorage.getItem("kiosk-mode") === "true";
+
       setTimeout(() => {
-        navigate("/checkin");
-      }, 10000);
+        //refresh page
+
+        window.location.reload();
+      }, 15000);
     } catch (error) {
       console.error("Chyba pri vytváraní rezervácie:", error);
       toast.error(

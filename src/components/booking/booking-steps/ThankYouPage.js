@@ -31,7 +31,7 @@ const ThankYouPage = ({
     if (isKiosk) {
       const timer = setTimeout(() => {
         navigate("/checkin");
-      }, 15000); // 15 seconds
+      }, 18000); // 15 seconds
       return () => clearTimeout(timer);
     }
   }, [isKiosk, navigate]);
