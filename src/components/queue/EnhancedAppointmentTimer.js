@@ -602,26 +602,39 @@ const EnhancedAppointmentTimer = ({
       </Card>
 
       <Dialog open={isFinishDialogOpen} onOpenChange={setIsFinishDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("timer.dialog.finishTitle")}</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="max-w-md w-[95%] sm:w-full mx-auto p-4 sm:p-6">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="text-xl sm:text-2xl font-bold text-gray-900">
+              {t("timer.dialog.finishTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-sm sm:text-base text-gray-600">
               {t("timer.dialog.enterPrice")}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Input
-              type="number"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder={t("timer.dialog.pricePlaceholder")}
-              className="text-lg py-6"
-            />
+
+          <div className="py-6 sm:py-8">
+            <div className="relative">
+              <Input
+                type="number"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder={t("timer.dialog.pricePlaceholder")}
+                className="text-lg sm:text-xl py-6 pr-12 text-center font-semibold placeholder:text-gray-400"
+                min="0"
+                step="0.01"
+                autoFocus
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-lg sm:text-xl font-semibold text-gray-500">
+                €
+              </span>
+            </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-2">
             <Button
               onClick={() => setIsFinishDialogOpen(false)}
               variant="outline"
+              className="w-full sm:w-auto text-sm sm:text-base"
             >
               {t("timer.dialog.cancel")}
             </Button>
@@ -630,7 +643,10 @@ const EnhancedAppointmentTimer = ({
                 setIsFinishDialogOpen(false);
                 setIsConfirmationDialogOpen(true);
               }}
-              className="bg-green-500 hover:bg-green-600 text-white"
+              className="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white font-medium text-sm sm:text-base"
+              disabled={
+                !price || isNaN(parseFloat(price)) || parseFloat(price) <= 0
+              }
             >
               {t("timer.dialog.confirm")}
             </Button>
@@ -642,28 +658,38 @@ const EnhancedAppointmentTimer = ({
         open={isConfirmationDialogOpen}
         onOpenChange={setIsConfirmationDialogOpen}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("timer.confirmDialog.title")}</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="max-w-md w-[95%] sm:w-full mx-auto p-4 sm:p-6">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="text-xl sm:text-2xl font-bold text-gray-900">
+              {t("timer.confirmDialog.title")}
+            </DialogTitle>
+            <DialogDescription className="text-sm sm:text-base text-gray-600">
               {t("timer.confirmDialog.message")}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <p className="text-lg font-semibold">
-              {t("timer.confirmDialog.price")}: {price} €
-            </p>{" "}
+
+          <div className="py-6 sm:py-8">
+            <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+              <span className="text-gray-600">
+                {t("timer.confirmDialog.price")}
+              </span>
+              <span className="text-xl sm:text-2xl font-bold text-gray-900">
+                {price} €
+              </span>
+            </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-2">
             <Button
               onClick={() => setIsConfirmationDialogOpen(false)}
               variant="outline"
+              className="w-full sm:w-auto"
             >
               {t("timer.confirmDialog.cancel")}
             </Button>
             <Button
               onClick={handleConfirmFinish}
-              className="bg-green-500 hover:bg-green-600 text-white"
+              className="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white font-medium"
             >
               {t("timer.confirmDialog.confirm")}
             </Button>

@@ -150,14 +150,7 @@ const CheckIn = () => {
   };
 
   const handleBookAppointment = () => {
-    const isKiosk =
-      localStorage.getItem("kiosk-mode") === "true" ||
-      location.search.includes("kiosk=true");
-    if (isKiosk) {
-      navigate("/?kiosk=true");
-    } else {
-      navigate("/");
-    }
+    navigate("/");
   };
 
   const handleWalkInSubmit = async (customerData) => {

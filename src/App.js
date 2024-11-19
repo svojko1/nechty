@@ -68,29 +68,22 @@ const NavigationControls = () => {
   return null;
 };
 
-// In App.js, modify the KioskRedirect component
 const KioskRedirect = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
+    // Only run this effect on page reload/initial load
+    const isPageReload =
+      performance.navigation?.type === 1 || !performance.navigation;
+    if (!isPageReload) return;
+
     const searchParams = new URLSearchParams(location.search);
-    const kioskParam = searchParams.get("kiosk");
-    const storedKioskMode = localStorage.getItem("kiosk-mode") === "true";
+    const isKioskMode = searchParams.get("kiosk") === "true";
 
-    // If kiosk parameter is explicitly set to false, update localStorage
-    if (kioskParam === "false") {
-      localStorage.setItem("kiosk-mode", "false");
-      return; // Don't redirect
-    }
-
-    // Only redirect if in kiosk mode and no explicit kiosk parameter
-    if (
-      storedKioskMode &&
-      kioskParam !== "false" &&
-      location.pathname !== "/checkin"
-    ) {
-      navigate("/checkin");
+    // If in kiosk mode and not already on /checkin, redirect to /checkin
+    if (isKioskMode && location.pathname !== "/checkin") {
+      navigate("/checkin?kiosk=true");
     }
   }, [location, navigate]);
 
