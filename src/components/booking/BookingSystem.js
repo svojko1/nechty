@@ -439,14 +439,7 @@ function BookingSystem({ facilityId }) {
   };
 
   const handleBookAnother = () => {
-    setActiveStep(0);
-    setSelectedService(null);
-    setSelectedStaff(null);
-    setSelectedDate(new Date());
-    setSelectedTime(null);
-    setCustomerName("");
-    setEmail("");
-    setPhone("");
+    window.location.reload();
   };
 
   return (
