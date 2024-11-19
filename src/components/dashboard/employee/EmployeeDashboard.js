@@ -547,19 +547,12 @@ const EmployeeDashboard = ({ session }) => {
   return (
     <Card className="w-full mx-auto bg-white shadow-2xl rounded-lg overflow-hidden">
       <CardContent className="p-6 space-y-8">
-        <div className="p-6 min-h-screen">
+        <div className="p-0 min-h-screen">
           <h1 className="text-3xl font-bold text-gray-800 mb-6">
             {t("dashboard.title")}
           </h1>
 
           <LanguageSwitcher />
-
-          {!isApproved && (
-            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
-              <p className="font-bold">Neschválený</p>
-              <p>Vaše konto čaká na schválenie administrátorom.</p>
-            </div>
-          )}
 
           <CheckInOutButton
             isCheckedIn={isCheckedIn}
