@@ -13,10 +13,20 @@ const CheckInOutButton = ({
   onCheckIn,
   onCheckOut,
   checkInTime,
-  isApproved,
+  isApproved = null,
 }) => {
   const { currentLanguage, t } = useLanguage();
   const dateLocale = currentLanguage === "vi" ? vi : sk;
+
+  if (isApproved === null) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+        <div className="flex justify-center items-center py-4">
+          <Loader2 className="h-6 w-6 animate-spin text-pink-500" />
+        </div>
+      </div>
+    );
+  }
 
   if (!isApproved) {
     return (

@@ -39,7 +39,7 @@ const EmployeeDashboard = ({ session }) => {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [price, setPrice] = useState("");
   const [employeeData, setEmployeeData] = useState(null);
-  const [isApproved, setIsApproved] = useState(false);
+  const [isApproved, setIsApproved] = useState(null);
   const [appointmentDays, setAppointmentDays] = useState(new Set());
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [queueId, setQueueId] = useState(null);
