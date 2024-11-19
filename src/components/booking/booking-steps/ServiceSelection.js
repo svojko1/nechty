@@ -8,7 +8,7 @@ import { Badge } from "src/components/ui/badge";
 
 const ServiceSelection = ({ services, selectedService, onServiceSelect }) => {
   return (
-    <div className="max-w-3xl mx-auto px-4">
+    <div className="max-w-3xl mx-auto ">
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
         {services.map((service) => (
           <motion.div

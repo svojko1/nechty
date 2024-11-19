@@ -15,8 +15,14 @@ export const FacilityProvider = ({ children }) => {
       // Get URL parameters
       const urlParams = new URLSearchParams(window.location.search);
       const pobockaParam = urlParams.get("pobocka");
+      const kioskParam = urlParams.get("kiosk");
 
-      // Check URL parameter first
+      // Handle kiosk parameter
+      if (kioskParam === "true" || kioskParam === "false") {
+        localStorage.setItem("kiosk-mode", kioskParam);
+      }
+
+      // Check URL parameter first for facility
       if (pobockaParam) {
         const { data: facilityData, error } = await supabase
           .from("facilities")

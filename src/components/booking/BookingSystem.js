@@ -5,6 +5,7 @@ import { format, parse, isValid } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast, Toaster } from "react-hot-toast";
 import { Sparkles, CheckCircle } from "lucide-react";
+import { cn } from "src/lib/utils";
 
 // UI components
 import { Button } from "src/components/ui/button";
@@ -386,11 +387,11 @@ function BookingSystem({ facilityId }) {
             onDateSelect={setSelectedDate}
             onTimeSelect={(time) => {
               setSelectedTime(time);
-              setActiveStep(3); // Changed from 4 to 3 since we removed a step
+              setActiveStep(3);
             }}
           />
         );
-      case 3: // Changed from 4 to 3
+      case 3:
         return (
           <BookingSummary
             selectedService={selectedService}
@@ -505,10 +506,13 @@ function BookingSystem({ facilityId }) {
                 disabled={
                   (activeStep === 0 && !selectedService) ||
                   (activeStep === 1 && !selectedStaff) ||
-                  (activeStep === 2 && !selectedDate) ||
-                  (activeStep === 3 && !selectedTime)
+                  (activeStep === 2 && (!selectedDate || !selectedTime)) // Added condition for date/time
                 }
-                className="px-4 py-2 text-sm sm:text-base"
+                className={cn(
+                  "px-4 py-2 text-sm sm:text-base",
+                  // Add visual feedback for disabled state
+                  "disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100"
+                )}
               >
                 Ďalej
               </Button>

@@ -197,22 +197,24 @@ export const handleEmployeeCheckIn = async (employeeId, facilityId) => {
  */
 export const handleEmployeeCheckOut = async (queueEntryId, facilityId) => {
   try {
-    const now = new Date();
+    const response = await fetch("/api/employee", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        queueEntryId,
+        facilityId,
+      }),
+    });
 
-    // Update employee queue entry
-    const { data, error } = await supabase
-      .from("employee_queue")
-      .update({
-        check_out_time: now.toISOString(),
-        is_active: false,
-        current_customer_id: null,
-      })
-      .eq("id", queueEntryId)
-      .select()
-      .single();
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to check out employee");
+    }
 
-    if (error) throw error;
-    return { data, error: null };
+    const data = await response.json();
+    return data;
   } catch (error) {
     console.error("Error checking out employee:", error);
     return { data: null, error };

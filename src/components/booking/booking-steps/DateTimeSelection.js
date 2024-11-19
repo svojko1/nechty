@@ -90,61 +90,59 @@ const DateTimeSelection = ({
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4">
-      <Card className="bg-white shadow-lg">
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Date Selection */}
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2 mb-4">
-                <CalendarIcon className="h-5 w-5 text-pink-500" />
-                <h3 className="text-lg font-semibold">Vyberte dátum</h3>
-              </div>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={onDateSelect}
-                  disabled={disabledDates}
-                  className="rounded-md border"
-                  locale={sk}
-                />
-              </motion.div>
-            </div>
-
-            {/* Time Selection */}
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2 mb-4">
-                <Clock className="h-5 w-5 text-pink-500" />
-                <h3 className="text-lg font-semibold">Vyberte čas</h3>
-              </div>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
-              >
-                <TimeSelection
-                  availableSlots={availableSlots}
-                  selectedTime={selectedTime}
-                  onTimeSelect={onTimeSelect}
-                  isLoadingSlots={isLoadingSlots}
-                  selectedDate={selectedDate}
-                />
-              </motion.div>
-              {selectedDate && (
-                <p className="text-sm text-gray-500 mt-4">
-                  Vybraný deň:{" "}
-                  {format(selectedDate, "d. MMMM yyyy", { locale: sk })}
-                </p>
-              )}
-            </div>
+    <div className="max-w-4xl mx-auto ">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-0">
+        {" "}
+        {/* Date Selection */}
+        <div className="space-y-4">
+          <div className="flex items-center space-x-2 mb-4">
+            <CalendarIcon className="h-5 w-5 text-pink-500" />
+            <h3 className="text-lg font-semibold">Vyberte dátum</h3>
           </div>
-        </CardContent>
-      </Card>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex" // Changed to just flex
+          >
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={onDateSelect}
+              disabled={disabledDates}
+              className="rounded-md border" // Removed mx-auto and center classes
+              locale={sk}
+            />
+          </motion.div>
+        </div>
+        {/* Time Selection */}
+        <div className="space-y-4">
+          <div className="flex items-center space-x-2 mb-4">
+            <Clock className="h-5 w-5 text-pink-500" />
+            <h3 className="text-lg font-semibold">Vyberte čas</h3>
+          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            <TimeSelection
+              availableSlots={availableSlots}
+              selectedTime={selectedTime}
+              onTimeSelect={onTimeSelect}
+              isLoadingSlots={isLoadingSlots}
+              selectedDate={selectedDate}
+            />
+          </motion.div>
+          {selectedDate && (
+            <p className="text-sm text-gray-500 mt-4">
+              Vybraný deň:{" "}
+              {format(selectedDate, "d. MMMM yyyy", { locale: sk })}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

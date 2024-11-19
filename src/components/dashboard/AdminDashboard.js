@@ -89,7 +89,6 @@ const AdminDashboard = () => {
   const [newFacility, setNewFacility] = useState({
     name: "",
     address: "",
-    google_place_id: "",
   });
   const [facilityEmployees, setFacilityEmployees] = useState([]);
   const handleEmployeeConfirmed = (newEmployee) => {
@@ -108,6 +107,8 @@ const AdminDashboard = () => {
     role: "customer",
     facility_id: "",
   });
+  const [isReceptionRegistrationOpen, setIsReceptionRegistrationOpen] =
+    useState(false);
   useEffect(() => {
     fetchUsers();
     fetchEmployees();
@@ -231,63 +232,104 @@ const AdminDashboard = () => {
   const handleAddUser = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     try {
-      // Validate facility selection for reception role
-      if (newUser.role === "reception" && !newUser.facility_id) {
-        toast.error("Prosím, vyberte zariadenie pre recepciu");
+      // For employee role, ensure we have a facility selected
+      if (newUser.role === "employee" && !newUser.facility_id) {
+        toast.error("Please select a facility for the employee");
+        setLoading(false);
         return;
       }
 
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: newUser.email,
-        password: newUser.password,
-        options: {
-          data: {
-            first_name: newUser.first_name,
-            last_name: newUser.last_name,
-            role: newUser.role,
+      // If role is employee, use the employee registration endpoint
+      if (newUser.role === "employee") {
+        if (
+          !newUser.email ||
+          !newUser.password ||
+          !newUser.first_name ||
+          !newUser.last_name
+        ) {
+          toast.error("Please fill in all required fields");
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch("/api/employee/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        },
-      });
+          body: JSON.stringify({
+            email: newUser.email,
+            password: newUser.password,
+            firstName: newUser.first_name,
+            lastName: newUser.last_name,
+            phone: newUser.phone || null,
+            facilityId: newUser.facility_id,
+          }),
+        });
 
-      if (authError) throw authError;
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to register employee");
+        }
 
-      // Prepare user data
-      const userData = {
-        id: authData.user.id,
-        email: newUser.email,
-        first_name: newUser.first_name,
-        last_name: newUser.last_name,
-        role: newUser.role,
-      };
+        toast.success("Employee registration submitted for approval");
+      } else {
+        // For non-employee roles, use admin API
+        // First create the user in Auth
+        const { data: authData, error: authError } =
+          await supabase.auth.admin.createUser({
+            email: newUser.email,
+            password: newUser.password,
+            email_confirm: true, // Auto confirm the email
+            user_metadata: {
+              first_name: newUser.first_name,
+              last_name: newUser.last_name,
+            },
+          });
 
-      // Add facility_id only for reception role
-      if (newUser.role === "reception") {
-        userData.facility_id = newUser.facility_id;
+        if (authError) throw authError;
+
+        // Then create the user record in the users table
+        const userData = {
+          id: authData.user.id,
+          email: newUser.email,
+          first_name: newUser.first_name,
+          last_name: newUser.last_name,
+          role: newUser.role,
+        };
+
+        // Add facility_id only for reception role
+        if (newUser.role === "reception" && newUser.facility_id) {
+          userData.facility_id = newUser.facility_id;
+        }
+
+        const { error: userError } = await supabase
+          .from("users")
+          .insert([userData]);
+
+        if (userError) throw userError;
+
+        toast.success("User added successfully");
       }
 
-      // Insert into users table
-      const { error: userError } = await supabase
-        .from("users")
-        .insert([userData]);
-
-      if (userError) throw userError;
-
-      // Rest of the function remains the same...
-
+      // Reset form
       setNewUser({
         email: "",
         password: "",
         first_name: "",
         last_name: "",
         role: "customer",
-        facility_id: "", // Clear facility_id as well
+        facility_id: "",
+        phone: "",
       });
 
-      // Rest of the success handling...
+      setIsAddUserDialogOpen(false);
+      fetchUsers(); // Refresh the users list
     } catch (error) {
-      console.error("Chyba pri pridávaní používateľa:", error);
-      toast.error(error.message || "Nepodarilo sa pridať používateľa");
+      console.error("Error adding user:", error);
+      toast.error(error.message || "Failed to add user");
     } finally {
       setLoading(false);
     }
@@ -651,14 +693,12 @@ const AdminDashboard = () => {
                               <SelectItem value="employee">
                                 Zamestnanec
                               </SelectItem>
-                              <SelectItem value="manager">Manažér</SelectItem>
-                              <SelectItem value="admin">Admin</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
                         {/* Show facility selection only for reception role */}
-                        {newUser.role === "reception" && (
+                        {
                           <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="facility" className="text-right">
                               Zariadenie
@@ -684,7 +724,7 @@ const AdminDashboard = () => {
                               </SelectContent>
                             </Select>
                           </div>
-                        )}
+                        }
                       </div>
                       <DialogFooter>
                         <Button type="submit" disabled={loading}>
@@ -825,7 +865,6 @@ const AdminDashboard = () => {
                   <TableRow>
                     <TableHead>Meno</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Špecializácia</TableHead>
                     <TableHead>Číslo stola</TableHead>
                     <TableHead>Prevádzka</TableHead>
                     <TableHead>Status</TableHead>
@@ -912,26 +951,7 @@ const AdminDashboard = () => {
                             required
                           />
                         </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                          <Label
-                            htmlFor="facility_google_place_id"
-                            className="text-right"
-                          >
-                            Google Place ID
-                          </Label>
-                          <Input
-                            id="facility_google_place_id"
-                            className="col-span-3"
-                            value={newFacility.google_place_id}
-                            onChange={(e) =>
-                              setNewFacility({
-                                ...newFacility,
-                                google_place_id: e.target.value,
-                              })
-                            }
-                            required
-                          />
-                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4"></div>
                       </div>
                       <DialogFooter>
                         <Button type="submit" disabled={loading}>
@@ -1041,8 +1061,6 @@ const AdminDashboard = () => {
                         <SelectContent>
                           <SelectItem value="customer">Zákazník</SelectItem>
                           <SelectItem value="employee">Zamestnanec</SelectItem>
-                          <SelectItem value="manager">Manažér</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

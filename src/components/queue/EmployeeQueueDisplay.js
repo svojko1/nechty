@@ -79,7 +79,7 @@ const StatCard = ({
 );
 
 const EarningsDialog = ({ isOpen, onClose, appointments }) => {
-  // Group appointments by employee
+  // Group appointments by employee logic remains same
   const employeeGroups = appointments.reduce((acc, app) => {
     const empName = `${app.employees?.users?.first_name} ${app.employees?.users?.last_name}`;
     if (!acc[empName]) {
@@ -95,65 +95,76 @@ const EarningsDialog = ({ isOpen, onClose, appointments }) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+        {" "}
+        {/* Add max-h and flex col */}
         <DialogHeader>
           <DialogTitle className="text-xl">Detail dnešných tržieb</DialogTitle>
         </DialogHeader>
-        <div className="space-y-6">
-          {Object.entries(employeeGroups).map(([empName, data]) => (
-            <Card key={empName} className="overflow-hidden">
-              <CardHeader className="bg-pink-50 py-3">
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-lg font-semibold text-pink-700">
-                    {empName}
-                  </CardTitle>
-                  <Badge variant="secondary" className="text-lg">
-                    {data.total} €
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Čas</TableHead>
-                      <TableHead>Služba</TableHead>
-                      <TableHead>Zákazník</TableHead>
-                      <TableHead className="text-right">Cena</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.appointments.map((app) => (
-                      <TableRow key={app.id}>
-                        <TableCell>
-                          {format(new Date(app.end_time), "HH:mm", {
-                            locale: sk,
-                          })}
-                        </TableCell>
-                        <TableCell>{app.services?.name}</TableCell>
-                        <TableCell>{app.customer_name}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          {app.price} €
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          ))}
-          <Card className="bg-pink-100">
-            <CardContent className="p-4">
-              <div className="flex justify-between items-center text-lg font-bold">
-                <span>Celkom za deň</span>
-                <span>
-                  {appointments.reduce((sum, app) => sum + (app.price || 0), 0)}{" "}
-                  €
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Add a scrollable container */}
+        <div className="flex-1 overflow-y-auto pr-2">
+          {" "}
+          {/* Add flex-1 and overflow */}
+          <div className="space-y-6">
+            {Object.entries(employeeGroups).map(([empName, data]) => (
+              <Card key={empName} className="overflow-hidden">
+                <CardHeader className="bg-pink-50 py-3">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-lg font-semibold text-pink-700">
+                      {empName}
+                    </CardTitle>
+                    <Badge variant="secondary" className="text-lg">
+                      {data.total} €
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    {" "}
+                    {/* Add horizontal scroll */}
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Čas</TableHead>
+                          <TableHead>Služba</TableHead>
+                          <TableHead>Zákazník</TableHead>
+                          <TableHead className="text-right">Cena</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data.appointments.map((app) => (
+                          <TableRow key={app.id}>
+                            <TableCell>
+                              {format(new Date(app.end_time), "HH:mm", {
+                                locale: sk,
+                              })}
+                            </TableCell>
+                            <TableCell>{app.services?.name}</TableCell>
+                            <TableCell>{app.customer_name}</TableCell>
+                            <TableCell className="text-right font-medium">
+                              {app.price} €
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
+        {/* Keep total card outside of scroll area */}
+        <Card className="bg-pink-100 mt-4">
+          <CardContent className="p-4">
+            <div className="flex justify-between items-center text-lg font-bold">
+              <span>Celkom za deň</span>
+              <span>
+                {appointments.reduce((sum, app) => sum + (app.price || 0), 0)} €
+              </span>
+            </div>
+          </CardContent>
+        </Card>
       </DialogContent>
     </Dialog>
   );
