@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { supabase } from "src/supabaseClient";
 import { toast } from "react-hot-toast";
@@ -96,6 +97,7 @@ const AdminDashboard = () => {
     // You might want to refresh the users list here as well
     fetchUsers();
   };
+  const navigate = useNavigate(); // Add this at the top of component
 
   const [isEditEmployeeDialogOpen, setIsEditEmployeeDialogOpen] =
     useState(false);
@@ -106,6 +108,7 @@ const AdminDashboard = () => {
     last_name: "",
     role: "customer",
     facility_id: "",
+    table_number: "",
   });
   const [isReceptionRegistrationOpen, setIsReceptionRegistrationOpen] =
     useState(false);
@@ -266,6 +269,8 @@ const AdminDashboard = () => {
             lastName: newUser.last_name,
             phone: newUser.phone || null,
             facilityId: newUser.facility_id,
+            tableNumber: newUser.table_number,
+            isAdminCreated: true, // This flag indicates it's created by admin
           }),
         });
 
@@ -323,10 +328,11 @@ const AdminDashboard = () => {
         role: "customer",
         facility_id: "",
         phone: "",
+        table_number: "",
       });
 
       setIsAddUserDialogOpen(false);
-      fetchUsers(); // Refresh the users list
+      window.location.reload();
     } catch (error) {
       console.error("Error adding user:", error);
       toast.error(error.message || "Failed to add user");
@@ -726,6 +732,29 @@ const AdminDashboard = () => {
                           </div>
                         }
                       </div>
+
+                      {newUser.role === "employee" && (
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="table_number" className="text-right">
+                            Číslo stola
+                          </Label>
+                          <Input
+                            id="table_number"
+                            type="number"
+                            className="col-span-3"
+                            value={newUser.table_number}
+                            onChange={(e) =>
+                              setNewUser({
+                                ...newUser,
+                                table_number: e.target.value,
+                              })
+                            }
+                            required
+                            min="1"
+                          />
+                        </div>
+                      )}
+
                       <DialogFooter>
                         <Button type="submit" disabled={loading}>
                           {loading ? "Pridávanie..." : "Pridať používateľa"}

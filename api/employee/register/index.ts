@@ -23,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { email, password, firstName, lastName, phone, facilityId } = req.body;
+    const { email, password, firstName, lastName, phone, facilityId,tableNumber,isAdminCreated = false } = req.body;
 
     // Create user account in Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
@@ -58,7 +58,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .insert({
         user_id: authData.user.id,
         facility_id: facilityId,
-        status: 'pending'
+        table_number: tableNumber, 
+        status: isAdminCreated ? 'approved' : 'pending' // Set status based on creator
       })
       .select()
       .single();
