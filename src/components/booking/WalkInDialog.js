@@ -142,7 +142,7 @@ const WalkInDialog = ({
                   <Loader2 className="h-4 w-4" />
                 </motion.div>
               ) : (
-                "Rezerovať"
+                "Rezervovať"
               )}
             </Button>
           </DialogFooter>
