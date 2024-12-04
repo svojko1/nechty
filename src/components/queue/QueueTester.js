@@ -16,6 +16,7 @@ import {
   CheckCircle,
   Users,
 } from "lucide-react";
+import AssignEmployeeDialog from "./AssignEmployeeDialog";
 import { getNextQueueEmployee } from "src/utils/employeeAvailability";
 
 // UI Components
@@ -110,6 +111,9 @@ const QueueTester = ({ facilityId }) => {
   const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
   const [price, setPrice] = useState("");
   const [nextQueueEmployee, setNextQueueEmployee] = useState(null);
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   // Initial data load
   useEffect(() => {
@@ -527,79 +531,178 @@ const QueueTester = ({ facilityId }) => {
     </div>
   );
 
-  const renderCustomerQueue = () => (
-    <div className="space-y-6">
-      <div className="flex items-center space-x-4">
-        <Input
-          type="number"
-          min="1"
-          max="50"
-          value={numCustomers}
-          onChange={(e) => setNumCustomers(e.target.value)}
-          className="w-32"
-          placeholder="Number of customers"
-        />
-        <Select value={selectedService} onValueChange={setSelectedService}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Select service" />
-          </SelectTrigger>
-          <SelectContent>
-            {services.map((service) => (
-              <SelectItem key={service.id} value={service.id}>
-                {service.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          onClick={handleAddTestCustomers}
-          disabled={isLoading || !selectedService}
-          className="bg-green-500 hover:bg-green-600"
-        >
-          <UserPlus className="w-4 h-4 mr-2" />
-          Add Test Customers
-        </Button>
-        <Button
-          onClick={handleClearTestCustomers}
-          variant="destructive"
-          disabled={isLoading}
-        >
-          <Trash2 className="w-4 h-4 mr-2" />
-          Clear Test Customers
-        </Button>
-      </div>
+  const renderCustomerQueue = () => {
+    const handleAssignEmployee = async (employeeId) => {
+      setIsAssigning(true);
+      try {
+        const now = new Date();
+        const endTime = new Date(
+          now.getTime() + selectedCustomer.services.duration * 60000
+        );
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Customer</TableHead>
-            <TableHead>Service</TableHead>
-            <TableHead>Contact</TableHead>
-            <TableHead>Waiting Since</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {customerQueue.map((customer) => (
-            <TableRow key={customer.id}>
-              <TableCell>{customer.customer_name}</TableCell>
-              <TableCell>{customer.services?.name}</TableCell>
-              <TableCell>{customer.contact_info}</TableCell>
-              <TableCell>
-                {new Date(customer.created_at).toLocaleTimeString()}
-              </TableCell>
-            </TableRow>
-          ))}
-          {customerQueue.length === 0 && (
+        // Start a Supabase transaction
+        const client = await supabase.rpc("begin_transaction");
+
+        try {
+          // Create the appointment
+          const { data: appointment, error: appointmentError } = await supabase
+            .from("appointments")
+            .insert({
+              customer_name: selectedCustomer.customer_name,
+              email: selectedCustomer.contact_info.includes("@")
+                ? selectedCustomer.contact_info
+                : null,
+              phone: !selectedCustomer.contact_info.includes("@")
+                ? selectedCustomer.contact_info
+                : null,
+              service_id: selectedCustomer.service_id,
+              employee_id: employeeId,
+              facility_id: selectedCustomer.facility_id,
+              start_time: now.toISOString(),
+              end_time: endTime.toISOString(),
+              status: "in_progress",
+              arrival_time: selectedCustomer.created_at,
+            })
+            .select()
+            .single();
+
+          if (appointmentError) throw appointmentError;
+
+          // Update employee queue
+          const { error: queueError } = await supabase
+            .from("employee_queue")
+            .update({
+              current_customer_id: appointment.id,
+              last_assignment_time: now.toISOString(),
+            })
+            .eq("employee_id", employeeId);
+
+          if (queueError) throw queueError;
+
+          // Remove customer from queue
+          const { error: removeError } = await supabase
+            .from("customer_queue")
+            .delete()
+            .eq("id", selectedCustomer.id);
+
+          if (removeError) throw removeError;
+
+          await supabase.rpc("commit_transaction");
+          toast.success("Customer assigned successfully!");
+          fetchCustomerQueue();
+        } catch (error) {
+          await supabase.rpc("rollback_transaction");
+          throw error;
+        }
+      } catch (error) {
+        console.error("Error assigning employee:", error);
+        toast.error("Failed to assign employee");
+      } finally {
+        setIsAssigning(false);
+        setIsAssignDialogOpen(false);
+        setSelectedCustomer(null);
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center space-x-4">
+          <Input
+            type="number"
+            min="1"
+            max="50"
+            value={numCustomers}
+            onChange={(e) => setNumCustomers(e.target.value)}
+            className="w-32"
+            placeholder="Number of customers"
+          />
+          <Select value={selectedService} onValueChange={setSelectedService}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Select service" />
+            </SelectTrigger>
+            <SelectContent>
+              {services.map((service) => (
+                <SelectItem key={service.id} value={service.id}>
+                  {service.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            onClick={handleAddTestCustomers}
+            disabled={isLoading || !selectedService}
+            className="bg-green-500 hover:bg-green-600"
+          >
+            <UserPlus className="w-4 h-4 mr-2" />
+            Add Test Customers
+          </Button>
+          <Button
+            onClick={handleClearTestCustomers}
+            variant="destructive"
+            disabled={isLoading}
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Clear Test Customers
+          </Button>
+        </div>
+
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-gray-500">
-                No customers in queue
-              </TableCell>
+              <TableHead>Customer</TableHead>
+              <TableHead>Service</TableHead>
+              <TableHead>Contact</TableHead>
+              <TableHead>Waiting Since</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </div>
-  );
+          </TableHeader>
+          <TableBody>
+            {customerQueue.map((customer) => (
+              <TableRow key={customer.id}>
+                <TableCell>{customer.customer_name}</TableCell>
+                <TableCell>{customer.services?.name}</TableCell>
+                <TableCell>{customer.contact_info}</TableCell>
+                <TableCell>
+                  {new Date(customer.created_at).toLocaleTimeString()}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    onClick={() => {
+                      setSelectedCustomer(customer);
+                      setIsAssignDialogOpen(true);
+                    }}
+                    size="sm"
+                    className="bg-blue-500 hover:bg-blue-600 text-white"
+                  >
+                    Assign Employee
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {customerQueue.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-gray-500">
+                  No customers in queue
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+
+        <AssignEmployeeDialog
+          open={isAssignDialogOpen}
+          onClose={() => setIsAssignDialogOpen(false)}
+          customer={selectedCustomer}
+          facilityId={facilityId}
+          onAssignmentComplete={(appointment) => {
+            // Handle successful assignment
+            // Maybe refresh your queue list
+            fetchCustomerQueue();
+          }}
+        />
+      </div>
+    );
+  };
 
   // Main render
   return (

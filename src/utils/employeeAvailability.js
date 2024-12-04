@@ -2,6 +2,7 @@
 
 import { se } from "date-fns/locale";
 import { supabase } from "../supabaseClient";
+import { createAppointmentData } from "./appointmentUtils";
 
 /**
  * Handle employee check-in at the start of their shift
@@ -550,105 +551,108 @@ export const finishCustomerAppointment = async (
         .limit(1)
         .single();
 
-      if (nextCustomer) {
-        // Calculate end time based on service duration
-        const endTime = new Date(
-          now.getTime() + nextCustomer.services.duration * 60 * 1000
-        );
+      //zatial vymazeme a nepriradime zakaznika automaticky - bude sa to robit cez recepiu
+      // if (nextCustomer) {
+      //   // Calculate end time based on service duration
+      //   const endTime = new Date(
+      //     now.getTime() + nextCustomer.services.duration * 60 * 1000
+      //   );
 
-        // Create new appointment for waiting customer
-        const { data: newAppointment } = await supabase
-          .from("appointments")
-          .insert({
-            customer_name: nextCustomer.customer_name,
-            email: nextCustomer.contact_info.includes("@")
-              ? nextCustomer.contact_info
-              : null,
-            phone: !nextCustomer.contact_info.includes("@")
-              ? nextCustomer.contact_info
-              : null,
-            service_id: nextCustomer.service_id,
-            employee_id: completedAppointment.employee_id,
-            facility_id: facilityId,
-            start_time: now.toISOString(),
-            end_time: endTime.toISOString(),
-            status: "in_progress",
-            arrival_time: nextCustomer.created_at,
-          })
-          .select()
-          .single();
+      //   // Create new appointment for waiting customer
+      //   const { data: newAppointment } = await supabase
+      //     .from("appointments")
+      //     .insert({
+      //       customer_name: nextCustomer.customer_name,
+      //       email: nextCustomer.contact_info.includes("@")
+      //         ? nextCustomer.contact_info
+      //         : null,
+      //       phone: !nextCustomer.contact_info.includes("@")
+      //         ? nextCustomer.contact_info
+      //         : null,
+      //       service_id: nextCustomer.service_id,
+      //       employee_id: completedAppointment.employee_id,
+      //       facility_id: facilityId,
+      //       start_time: now.toISOString(),
+      //       end_time: endTime.toISOString(),
+      //       status: "in_progress",
+      //       arrival_time: nextCustomer.created_at,
+      //     })
+      //     .select()
+      //     .single();
 
-        // Remove customer from queue
-        await supabase
-          .from("customer_queue")
-          .delete()
-          .eq("id", nextCustomer.id);
+      //   // Remove customer from queue
+      //   await supabase
+      //     .from("customer_queue")
+      //     .delete()
+      //     .eq("id", nextCustomer.id);
 
-        // Update employee queue with new customer
-        await supabase
-          .from("employee_queue")
-          .update({
-            current_customer_id: newAppointment.id,
-            last_assignment_time: now.toISOString(),
-          })
-          .eq("id", employeeQueue.id);
+      //   // Update employee queue with new customer
+      //   await supabase
+      //     .from("employee_queue")
+      //     .update({
+      //       current_customer_id: newAppointment.id,
+      //       last_assignment_time: now.toISOString(),
+      //     })
+      //     .eq("id", employeeQueue.id);
 
-        // Update current position in daily queue
+      //   // Update current position in daily queue
+      //   await supabase
+      //     .from("daily_facility_queue")
+      //     .update({
+      //       current_position: employeeQueue.position_in_queue,
+      //     })
+      //     .eq("id", dailyQueue.id);
+
+      //   await supabase.rpc("commit_transaction");
+
+      //   return {
+      //     status: "NEXT_CUSTOMER_ASSIGNED",
+      //     completedAppointment,
+      //     nextAppointment: newAppointment,
+      //   };
+      // } else {
+      // No waiting customers, update employee queue to show availability
+
+      //koniec pre : %zatial vymazeme a nepriradime zakaznika automaticky - bude sa to robit cez recepiu
+
+      await supabase
+        .from("employee_queue")
+        .update({
+          current_customer_id: null,
+          last_assignment_time: now.toISOString(),
+        })
+        .eq("id", employeeQueue.id);
+
+      // Get all employees in current round to check if round is complete
+      const { data: employeesInRound } = await supabase
+        .from("employee_queue")
+        .select("*")
+        .eq("facility_id", facilityId)
+        .eq("queue_round", dailyQueue.current_round)
+        .eq("is_active", true);
+
+      // Check if all employees in round are now free
+      const allEmployeesFree = employeesInRound?.every(
+        (emp) => emp.current_customer_id === null
+      );
+
+      if (allEmployeesFree) {
+        // Reset current_position to 0 when all employees are free
         await supabase
           .from("daily_facility_queue")
           .update({
-            current_position: employeeQueue.position_in_queue,
+            current_position: 0,
           })
           .eq("id", dailyQueue.id);
-
-        await supabase.rpc("commit_transaction");
-
-        return {
-          status: "NEXT_CUSTOMER_ASSIGNED",
-          completedAppointment,
-          nextAppointment: newAppointment,
-        };
-      } else {
-        // No waiting customers, update employee queue to show availability
-        await supabase
-          .from("employee_queue")
-          .update({
-            current_customer_id: null,
-            last_assignment_time: now.toISOString(),
-          })
-          .eq("id", employeeQueue.id);
-
-        // Get all employees in current round to check if round is complete
-        const { data: employeesInRound } = await supabase
-          .from("employee_queue")
-          .select("*")
-          .eq("facility_id", facilityId)
-          .eq("queue_round", dailyQueue.current_round)
-          .eq("is_active", true);
-
-        // Check if all employees in round are now free
-        const allEmployeesFree = employeesInRound?.every(
-          (emp) => emp.current_customer_id === null
-        );
-
-        if (allEmployeesFree) {
-          // Reset current_position to 0 when all employees are free
-          await supabase
-            .from("daily_facility_queue")
-            .update({
-              current_position: 0,
-            })
-            .eq("id", dailyQueue.id);
-        }
-
-        await supabase.rpc("commit_transaction");
-
-        return {
-          status: "COMPLETED",
-          completedAppointment,
-          nextAppointment: null,
-        };
       }
+
+      await supabase.rpc("commit_transaction");
+
+      return {
+        status: "COMPLETED",
+        completedAppointment,
+        nextAppointment: null,
+      };
     } catch (error) {
       await supabase.rpc("rollback_transaction");
       throw error;
@@ -658,8 +662,6 @@ export const finishCustomerAppointment = async (
     return { status: "ERROR", error };
   }
 };
-
-// Add this function to src/utils/employeeAvailability.js
 
 /**
  * Accept and start a customer appointment after check-in

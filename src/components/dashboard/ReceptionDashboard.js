@@ -45,6 +45,7 @@ import {
 import WaitingCustomersDisplay from "src/components/queue/WaitingCustomersDisplay";
 import QueueTester from "src/components/queue/QueueTester";
 import EmployeeQueueDisplay from "src/components/queue/EmployeeQueueDisplay";
+import PedicureStatusDisplay from "src/components/PedicureStatusDisplay";
 
 const ReceptionDashboard = () => {
   const navigate = useNavigate();
@@ -274,6 +275,7 @@ const ReceptionDashboard = () => {
       {process.env.NODE_ENV === "development" && (
         <QueueTester facilityId={userFacilityId} />
       )}
+      {userFacilityId && <PedicureStatusDisplay facilityId={userFacilityId} />}
       <WaitingCustomersDisplay />
       <Card className="w-full">
         <CardHeader>

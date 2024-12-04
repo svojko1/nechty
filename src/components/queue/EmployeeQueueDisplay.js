@@ -10,6 +10,8 @@ import {
   DollarSign,
   ChevronRight,
 } from "lucide-react";
+import { ScrollArea } from "src/components/ui/scroll-area";
+
 import { toast } from "react-hot-toast";
 import { supabase } from "src/supabaseClient";
 
@@ -79,92 +81,148 @@ const StatCard = ({
 );
 
 const EarningsDialog = ({ isOpen, onClose, appointments }) => {
-  // Group appointments by employee logic remains same
-  const employeeGroups = appointments.reduce((acc, app) => {
-    const empName = `${app.employees?.users?.first_name} ${app.employees?.users?.last_name}`;
-    if (!acc[empName]) {
-      acc[empName] = {
-        appointments: [],
-        total: 0,
-      };
+  // Find earliest and latest appointments
+  const generateTimeRange = () => {
+    if (!appointments.length) return [];
+
+    // Find earliest and latest times
+    const times = appointments.map((app) => new Date(app.start_time));
+    const earliest = new Date(Math.min(...times));
+    const latest = new Date(Math.max(...times));
+
+    // Round earliest down to nearest 30 minutes
+    earliest.setMinutes(Math.floor(earliest.getMinutes() / 30) * 30, 0, 0);
+
+    // Round latest up to nearest 30 minutes
+    latest.setMinutes(Math.ceil(latest.getMinutes() / 30) * 30, 0, 0);
+
+    // Generate slots
+    const slots = [];
+    const current = new Date(earliest);
+
+    while (current <= latest) {
+      slots.push(format(current, "HH:mm", { locale: sk }));
+      current.setMinutes(current.getMinutes() + 30);
     }
-    acc[empName].appointments.push(app);
-    acc[empName].total += app.price || 0;
+
+    return slots;
+  };
+
+  const timeSlots = generateTimeRange();
+
+  // Rest of your existing grouping logic
+  const groupedAppointments = appointments.reduce((acc, app) => {
+    const appTime = new Date(app.start_time);
+    const hours = appTime.getHours();
+    const minutes = appTime.getMinutes();
+    const roundedMinutes = Math.floor(minutes / 30) * 30;
+    appTime.setHours(hours, roundedMinutes, 0, 0);
+
+    const timeSlot = format(appTime, "HH:mm", { locale: sk });
+    const empName = `${app.employees?.users?.first_name}`;
+
+    if (!acc[timeSlot]) {
+      acc[timeSlot] = {};
+    }
+    if (!acc[timeSlot][empName]) {
+      acc[timeSlot][empName] = 0;
+    }
+    acc[timeSlot][empName] += app.price || 0;
     return acc;
   }, {});
+
+  // Get unique employee names
+  const employees = [
+    ...new Set(appointments.map((app) => app.employees?.users?.first_name)),
+  ]
+    .filter(Boolean)
+    .sort();
+
+  // Calculate totals for each employee
+  const employeeTotals = employees.reduce((acc, emp) => {
+    acc[emp] = timeSlots.reduce(
+      (sum, slot) => sum + (groupedAppointments[slot]?.[emp] || 0),
+      0
+    );
+    return acc;
+  }, {});
+
+  // Calculate grand total
+  const grandTotal = Object.values(employeeTotals).reduce(
+    (sum, total) => sum + total,
+    0
+  );
+
+  if (!appointments.length) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Detail dnešných tržieb</DialogTitle>
+          </DialogHeader>
+          <div className="text-center py-4">No appointments for today</div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
-        {" "}
-        {/* Add max-h and flex col */}
         <DialogHeader>
           <DialogTitle className="text-xl">Detail dnešných tržieb</DialogTitle>
         </DialogHeader>
-        {/* Add a scrollable container */}
-        <div className="flex-1 overflow-y-auto pr-2">
-          {" "}
-          {/* Add flex-1 and overflow */}
-          <div className="space-y-6">
-            {Object.entries(employeeGroups).map(([empName, data]) => (
-              <Card key={empName} className="overflow-hidden">
-                <CardHeader className="bg-pink-50 py-3">
-                  <div className="flex justify-between items-center">
-                    <CardTitle className="text-lg font-semibold text-pink-700">
-                      {empName}
-                    </CardTitle>
-                    <Badge variant="secondary" className="text-lg">
-                      {data.total} €
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    {" "}
-                    {/* Add horizontal scroll */}
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Čas</TableHead>
-                          <TableHead>Služba</TableHead>
-                          <TableHead>Zákazník</TableHead>
-                          <TableHead className="text-right">Cena</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data.appointments.map((app) => (
-                          <TableRow key={app.id}>
-                            <TableCell>
-                              {format(new Date(app.end_time), "HH:mm", {
-                                locale: sk,
-                              })}
-                            </TableCell>
-                            <TableCell>{app.services?.name}</TableCell>
-                            <TableCell>{app.customer_name}</TableCell>
-                            <TableCell className="text-right font-medium">
-                              {app.price} €
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="font-bold">čas-kolo</TableHead>
+                {employees.map((emp) => (
+                  <TableHead key={emp} className="font-bold">
+                    {emp}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {timeSlots.map((timeSlot, index) => {
+                const nextSlot = timeSlots[index + 1];
+                const displaySlot = nextSlot
+                  ? `${timeSlot}-${nextSlot}`
+                  : timeSlot;
+
+                return (
+                  <TableRow key={timeSlot}>
+                    <TableCell className="font-medium whitespace-nowrap">
+                      {displaySlot}
+                    </TableCell>
+                    {employees.map((emp) => (
+                      <TableCell key={emp}>
+                        {groupedAppointments[timeSlot]?.[emp]
+                          ? `${groupedAppointments[timeSlot][emp]} €`
+                          : ""}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })}
+              <TableRow className="border-t-2">
+                <TableCell className="font-medium">súčet</TableCell>
+                {employees.map((emp) => (
+                  <TableCell key={emp} className="font-bold">
+                    {employeeTotals[emp]} €
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+        <div className="mt-4 border-t-2 pt-2">
+          <div className="flex justify-between items-center">
+            <span className="font-medium">dokopy spolu</span>
+            <span className="font-bold text-lg">{grandTotal} €</span>
           </div>
         </div>
-        {/* Keep total card outside of scroll area */}
-        <Card className="bg-pink-100 mt-4">
-          <CardContent className="p-4">
-            <div className="flex justify-between items-center text-lg font-bold">
-              <span>Celkom za deň</span>
-              <span>
-                {appointments.reduce((sum, app) => sum + (app.price || 0), 0)} €
-              </span>
-            </div>
-          </CardContent>
-        </Card>
       </DialogContent>
     </Dialog>
   );
