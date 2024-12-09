@@ -222,19 +222,15 @@ function BookingSystem({ facilityId }) {
         const [hours, minutes] = slot.split(":");
         slotTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
-        const slotEndTime = new Date(
-          slotTime.getTime() + selectedService.duration * 60000
-        );
-
+        // Use the actual end_time from the appointments for conflict checking
         const availableEmployeesForSlot = employees.filter((employee) => {
           const conflictingAppointment = bookedSlots.find((bookedSlot) => {
             const bookedStart = new Date(bookedSlot.start_time);
             const bookedEnd = new Date(bookedSlot.end_time);
             return (
               bookedSlot.employee_id === employee.id &&
-              ((slotTime >= bookedStart && slotTime < bookedEnd) ||
-                (slotEndTime > bookedStart && slotEndTime <= bookedEnd) ||
-                (slotTime <= bookedStart && slotEndTime >= bookedEnd))
+              slotTime >= bookedStart &&
+              slotTime < bookedEnd
             );
           });
 
@@ -284,21 +280,16 @@ function BookingSystem({ facilityId }) {
     }
 
     try {
-      let selectedEmployeeId;
-      if (selectedStaff.id === "any") {
-        if (selectedRandomEmployee) {
-          selectedEmployeeId = selectedRandomEmployee.id;
-        } else {
-          throw new Error("No available employee selected");
-        }
-      } else {
-        selectedEmployeeId = selectedStaff.id;
+      let selectedEmployeeId =
+        selectedStaff.id === "any"
+          ? selectedRandomEmployee?.id
+          : selectedStaff.id;
+
+      if (!selectedEmployeeId) {
+        throw new Error("No available employee selected");
       }
 
-      // Ensure we have valid date and time
-      const appointmentDate = selectedDate
-        ? new Date(selectedDate)
-        : new Date();
+      const appointmentDate = selectedDate || new Date();
       const appointmentTime = selectedTime
         ? parse(selectedTime, "HH:mm", new Date())
         : new Date();
@@ -324,13 +315,15 @@ function BookingSystem({ facilityId }) {
         customer_name: customerName,
         email: email,
         phone: phone,
-        service_id: selectedService.id,
+        service_id: selectedService.actualServices
+          ? selectedService.actualServices[0].id // Use manikura service ID for combo
+          : selectedService.id,
         employee_id: selectedEmployeeId,
         facility_id: facility.id,
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         status: "scheduled",
-        // price: selectedService.price,
+        is_combo: selectedService.isCombined || false,
       };
 
       const { data, error } = await supabase
@@ -344,12 +337,11 @@ function BookingSystem({ facilityId }) {
       toast.success("Rezervácia bola úspešne vytvorená!");
 
       const isKiosk = localStorage.getItem("kiosk-mode") === "true";
-
-      setTimeout(() => {
-        //refresh page
-
-        window.location.reload();
-      }, 15000);
+      if (isKiosk) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 15000);
+      }
     } catch (error) {
       console.error("Chyba pri vytváraní rezervácie:", error);
       toast.error(

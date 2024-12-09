@@ -43,6 +43,7 @@ const WalkInDialog = ({
       customer_name: formData.customerName,
       // Only include contact_info if either email or phone is provided
       contact_info: formData.email || formData.phone || "",
+      isCombo: selectedService?.isCombo || false,
       service_id: selectedService?.id,
     });
   };

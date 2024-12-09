@@ -14,10 +14,14 @@ import {
   Trash2,
   Power,
   CheckCircle,
+  Armchair,
   Users,
+  Layers,
 } from "lucide-react";
 import AssignEmployeeDialog from "./AssignEmployeeDialog";
 import { getNextQueueEmployee } from "src/utils/employeeAvailability";
+import { cn } from "../../lib/utils";
+import ChairManagementDialog from "../ChairManagementDialog";
 
 // UI Components
 import { Button } from "src/components/ui/button";
@@ -114,11 +118,88 @@ const QueueTester = ({ facilityId }) => {
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [isChairDialogOpen, setIsChairDialogOpen] = useState(false);
 
   // Initial data load
   useEffect(() => {
     if (facilityId) {
       refreshAllData();
+    }
+  }, [facilityId]);
+
+  const setupRealtimeSubscriptions = () => {
+    // Subscribe to employee_queue changes
+    const employeeQueueSub = supabase
+      .channel("employee-queue-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "employee_queue",
+          filter: `facility_id=eq.${facilityId}`,
+        },
+        () => {
+          fetchActiveEmployees();
+          fetchNextEmployee();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to customer_queue changes
+    const customerQueueSub = supabase
+      .channel("customer-queue-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "customer_queue",
+          filter: `facility_id=eq.${facilityId}`,
+        },
+        () => {
+          fetchCustomerQueue();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to appointments changes
+    const appointmentsSub = supabase
+      .channel("appointments-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "appointments",
+          filter: `facility_id=eq.${facilityId}`,
+        },
+        () => {
+          fetchActiveAppointments();
+        }
+      )
+      .subscribe();
+
+    // Return cleanup function
+    return () => {
+      supabase.removeChannel(employeeQueueSub);
+      supabase.removeChannel(customerQueueSub);
+      supabase.removeChannel(appointmentsSub);
+    };
+  };
+
+  useEffect(() => {
+    if (facilityId) {
+      // Initial data fetch
+      refreshAllData();
+
+      // Set up real-time subscriptions
+      const cleanup = setupRealtimeSubscriptions();
+
+      // Cleanup subscriptions on component unmount
+      return () => {
+        cleanup();
+      };
     }
   }, [facilityId]);
 
@@ -425,10 +506,12 @@ const QueueTester = ({ facilityId }) => {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Employee</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Queue Position</TableHead>
-          <TableHead>Actions</TableHead>
+          <TableHead>Zamestnanec</TableHead>
+          <TableHead>Stav</TableHead>
+          <TableHead>Pozícia v rade</TableHead>
+          <TableHead>Kolo</TableHead>
+          <TableHead>Stôl</TableHead>
+          <TableHead>Akcie</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -440,7 +523,7 @@ const QueueTester = ({ facilityId }) => {
 
           return (
             <TableRow key={employee.id}>
-              <TableCell>
+              <TableCell className="font-medium">
                 {employee.users.first_name} {employee.users.last_name}
               </TableCell>
               <TableCell>
@@ -452,28 +535,47 @@ const QueueTester = ({ facilityId }) => {
                       : "bg-gray-100 text-gray-800"
                   }
                 >
-                  {isActive ? "Active" : "Inactive"}
+                  {isActive ? "Aktívny" : "Neaktívny"}
                 </Badge>
               </TableCell>
               <TableCell>{queueEntry?.position_in_queue || "-"}</TableCell>
               <TableCell>
-                <Button
-                  onClick={() =>
-                    isActive
-                      ? handleCheckOut(queueEntry.id)
-                      : handleCheckIn(employee.id)
-                  }
-                  variant={isActive ? "destructive" : "outline"}
-                  size="sm"
-                  disabled={isLoading}
-                >
-                  <Power className="w-4 h-4 mr-2" />
-                  {isActive ? "Check Out" : "Check In"}
-                </Button>
+                {queueEntry ? `Kolo ${queueEntry.queue_round}` : "-"}
+              </TableCell>
+              <TableCell>
+                {employee.table_number ? `Stôl ${employee.table_number}` : "-"}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() =>
+                      isActive
+                        ? handleCheckOut(queueEntry.id)
+                        : handleCheckIn(employee.id)
+                    }
+                    variant={isActive ? "destructive" : "outline"}
+                    size="sm"
+                    disabled={isLoading}
+                    className={cn(
+                      "whitespace-nowrap",
+                      isActive && "bg-red-500 hover:bg-red-600"
+                    )}
+                  >
+                    <Power className="w-4 h-4 mr-2" />
+                    {isActive ? "Odhlásiť" : "Prihlásiť"}
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           );
         })}
+        {employees.length === 0 && (
+          <TableRow>
+            <TableCell colSpan={6} className="text-center py-6 text-gray-500">
+              Žiadni zamestnanci nie sú k dispozícii
+            </TableCell>
+          </TableRow>
+        )}
       </TableBody>
     </Table>
   );
@@ -481,22 +583,35 @@ const QueueTester = ({ facilityId }) => {
   const renderActiveAppointments = () => (
     <div className="space-y-6">
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Active Appointments</h3>
+        <h3 className="text-lg font-semibold">Aktívne rezervácie</h3>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Customer</TableHead>
-              <TableHead>Service</TableHead>
-              <TableHead>Employee</TableHead>
-              <TableHead>Start Time</TableHead>
-              <TableHead>Actions</TableHead>
+              <TableHead>Zákazník</TableHead>
+              <TableHead>Služba</TableHead>
+              <TableHead>Zamestnanec</TableHead>
+              <TableHead>Čas začiatku</TableHead>
+              <TableHead>Akcie</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {activeAppointments.map((appointment) => (
               <TableRow key={appointment.id}>
                 <TableCell>{appointment.customer_name}</TableCell>
-                <TableCell>{appointment.services.name}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    {appointment.services.name}
+                    {appointment.is_combo && (
+                      <Badge
+                        variant="outline"
+                        className="bg-purple-100 text-purple-800 border-purple-300 flex items-center gap-1"
+                      >
+                        <Layers className="h-3 w-3" />
+                        Combo
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>
                   {`${appointment.employees.users.first_name} ${appointment.employees.users.last_name}`}
                 </TableCell>
@@ -521,7 +636,7 @@ const QueueTester = ({ facilityId }) => {
             {activeAppointments.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-gray-500">
-                  No active appointments
+                  Žiadne aktívne rezervácie
                 </TableCell>
               </TableRow>
             )}
@@ -618,7 +733,7 @@ const QueueTester = ({ facilityId }) => {
           />
           <Select value={selectedService} onValueChange={setSelectedService}>
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select service" />
+              <SelectValue placeholder="Vyberte službu" />
             </SelectTrigger>
             <SelectContent>
               {services.map((service) => (
@@ -634,7 +749,7 @@ const QueueTester = ({ facilityId }) => {
             className="bg-green-500 hover:bg-green-600"
           >
             <UserPlus className="w-4 h-4 mr-2" />
-            Add Test Customers
+            Pridať testových zákazníkov
           </Button>
           <Button
             onClick={handleClearTestCustomers}
@@ -642,25 +757,38 @@ const QueueTester = ({ facilityId }) => {
             disabled={isLoading}
           >
             <Trash2 className="w-4 h-4 mr-2" />
-            Clear Test Customers
+            Vymazať testových zákazníkov
           </Button>
         </div>
 
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Customer</TableHead>
-              <TableHead>Service</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead>Waiting Since</TableHead>
-              <TableHead>Actions</TableHead>
+              <TableHead>Zákazník</TableHead>
+              <TableHead>Služba</TableHead>
+              <TableHead>Kontakt</TableHead>
+              <TableHead>Čaká od</TableHead>
+              <TableHead>Príchod</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {customerQueue.map((customer) => (
               <TableRow key={customer.id}>
                 <TableCell>{customer.customer_name}</TableCell>
-                <TableCell>{customer.services?.name}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    {customer.services?.name}
+                    {customer.is_combo && (
+                      <Badge
+                        variant="outline"
+                        className="bg-purple-100 text-purple-800 border-purple-300 flex items-center gap-1"
+                      >
+                        <Layers className="h-3 w-3" />
+                        Combo
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>{customer.contact_info}</TableCell>
                 <TableCell>
                   {new Date(customer.created_at).toLocaleTimeString()}
@@ -674,7 +802,7 @@ const QueueTester = ({ facilityId }) => {
                     size="sm"
                     className="bg-blue-500 hover:bg-blue-600 text-white"
                   >
-                    Assign Employee
+                    Priradiť zamestnanca
                   </Button>
                 </TableCell>
               </TableRow>
@@ -682,7 +810,7 @@ const QueueTester = ({ facilityId }) => {
             {customerQueue.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-gray-500">
-                  No customers in queue
+                  Žiadni zákazníci v rade{" "}
                 </TableCell>
               </TableRow>
             )}
@@ -710,10 +838,21 @@ const QueueTester = ({ facilityId }) => {
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle className="text-xl font-bold text-pink-700">
-            Queue Testing Tools
+            Manažment poradia
           </CardTitle>
           <div className="flex space-x-2">
-            {" "}
+            <Button onClick={() => setIsChairDialogOpen(true)}>
+              <Armchair className="h-4 w-4 mr-2" />
+              Správa stoličiek
+            </Button>
+            <ChairManagementDialog
+              isOpen={isChairDialogOpen}
+              onClose={() => setIsChairDialogOpen(false)}
+              facilityId={facilityId}
+              onUpdate={({ totalChairs, pedicureChairs }) => {
+                // Update your local state here if needed
+              }}
+            />{" "}
             {/* Changed to div with flex */}
             <Button
               onClick={handleFinishInitialCheckIn}
@@ -731,7 +870,7 @@ const QueueTester = ({ facilityId }) => {
               disabled={isLoading}
             >
               <RefreshCcw className="w-4 h-4 mr-2" />
-              Refresh All
+              Refresh
             </Button>
           </div>
         </div>
@@ -741,19 +880,17 @@ const QueueTester = ({ facilityId }) => {
           <TabsList className="mb-4">
             <TabsTrigger value="employees">
               <UserPlus className="w-4 h-4 mr-2" />
-              Employees
+              Zamestnanci
             </TabsTrigger>
             <TabsTrigger value="appointments">
               <CheckCircle className="w-4 h-4 mr-2" />
-              Appointments
+              Rezervácie
             </TabsTrigger>
             <TabsTrigger value="queue">
               <Users className="w-4 h-4 mr-2" />
-              Queue
+              Rad
             </TabsTrigger>
           </TabsList>
-
-          <TabsContent value="employees">{renderEmployeeTable()}</TabsContent>
 
           <TabsContent value="appointments">
             {renderActiveAppointments()}
@@ -778,33 +915,33 @@ const QueueTester = ({ facilityId }) => {
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Finish Appointment</DialogTitle>
+              <DialogTitle>Dokončiť rezerváciu</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               {selectedAppointment && (
                 <div className="grid gap-4">
                   <div className="text-sm space-y-2">
                     <p>
-                      <strong>Customer:</strong>{" "}
+                      <strong>Zákazník:</strong>{" "}
                       {selectedAppointment.customer_name}
                     </p>
                     <p>
-                      <strong>Service:</strong>{" "}
+                      <strong>Služba:</strong>{" "}
                       {selectedAppointment.services.name}
                     </p>
                     <p>
-                      <strong>Employee:</strong>{" "}
+                      <strong>Zamestnanec:</strong>{" "}
                       {`${selectedAppointment.employees.users.first_name} ${selectedAppointment.employees.users.last_name}`}
                     </p>
                     <p>
-                      <strong>Start Time:</strong>{" "}
+                      <strong>Čas začiatku:</strong>{" "}
                       {new Date(
                         selectedAppointment.start_time
                       ).toLocaleString()}
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Price</label>
+                    <label className="text-sm font-medium">Cena</label>{" "}
                     <Input
                       type="number"
                       step="0.01"
@@ -825,7 +962,7 @@ const QueueTester = ({ facilityId }) => {
                   setPrice("");
                 }}
               >
-                Cancel
+                Zrušiť
               </Button>
               <Button
                 onClick={() =>
@@ -834,7 +971,7 @@ const QueueTester = ({ facilityId }) => {
                 disabled={!price || isLoading}
                 className="bg-green-500 hover:bg-green-600"
               >
-                {isLoading ? "Processing..." : "Complete Appointment"}
+                {isLoading ? "Spracováva sa..." : "Dokončiť rezerváciu"}
               </Button>
             </DialogFooter>
           </DialogContent>

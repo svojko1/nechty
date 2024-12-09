@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Clock, CalendarPlus, ArrowLeft } from "lucide-react";
+import {
+  Clock,
+  CalendarPlus,
+  ArrowLeft,
+  Scissors,
+  HandMetal,
+} from "lucide-react";
 import { supabase } from "src/supabaseClient";
 import { toast } from "react-hot-toast";
 
@@ -27,7 +33,19 @@ const NoReservationStep = ({ onWalkIn, onBook, onBack }) => {
         .order("name");
 
       if (error) throw error;
-      setServices(data || []);
+
+      // Add combined service option
+      const combinedService = {
+        id: "combined",
+        name: "Pedikúra + Manikúra",
+        duration: 90, // Example duration
+        price: "70", // Example price
+        actualServiceId: data.find((s) =>
+          s.name.toLowerCase().includes("manikúra")
+        )?.id, // Get the actual manikúra service ID
+      };
+
+      setServices([...data, combinedService]);
     } catch (error) {
       console.error("Error fetching services:", error);
       toast.error("Nepodarilo sa načítať služby");
@@ -38,7 +56,27 @@ const NoReservationStep = ({ onWalkIn, onBook, onBack }) => {
 
   const handleServiceSelect = (service) => {
     setSelectedService(service);
-    onWalkIn(service); // Pass the selected service up
+    if (service.id === "combined") {
+      // Find both services
+      const manikuraService = services.find((s) =>
+        s.name.toLowerCase().includes("manikúra")
+      );
+      const pedikuraService = services.find((s) =>
+        s.name.toLowerCase().includes("pedikúra")
+      );
+
+      // Create a combined service object with both service IDs
+      const combinedService = {
+        ...service,
+        id: manikuraService.id,
+        secondaryServiceId: pedikuraService.id,
+        name: "Manikúra + Pedikúra",
+        isCombined: true,
+      };
+      onWalkIn(combinedService);
+    } else {
+      onWalkIn(service);
+    }
   };
 
   if (showServiceSelection) {
@@ -50,12 +88,17 @@ const NoReservationStep = ({ onWalkIn, onBook, onBack }) => {
           </h2>
         </div>
 
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-          {services.map((service) => (
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 md:grid-rows-2">
+          {services.map((service, index) => (
             <motion.div
               key={service.id}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              className={
+                index === 2
+                  ? "md:col-span-2 md:row-start-2" // Bottom item spans two columns on larger screens
+                  : "col-span-1" // Each item occupies one column on mobile
+              }
             >
               <Card
                 className={`cursor-pointer transition-all h-full ${
@@ -67,9 +110,9 @@ const NoReservationStep = ({ onWalkIn, onBook, onBack }) => {
               >
                 <CardContent className="p-0">
                   <div className="flex flex-col items-center py-12 px-6">
-                    <h3 className="text-2xl font-semibold mb-8">
-                      {service.name}
-                    </h3>
+                    <div className="flex items-center gap-2 mb-8">
+                      <h3 className="text-2xl font-semibold">{service.name}</h3>
+                    </div>
                     <div className="flex flex-col items-center space-y-6">
                       <Badge
                         variant="secondary"
@@ -99,12 +142,6 @@ const NoReservationStep = ({ onWalkIn, onBook, onBack }) => {
 
   return (
     <div className="flex flex-col sm:flex-row gap-6 max-w-2xl mx-auto">
-      {/* <div className="mb-6 absolute top-4 left-4">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-      </div> */}
-
       <motion.div
         className="flex-1 aspect-square"
         whileHover={{ scale: 1.03 }}

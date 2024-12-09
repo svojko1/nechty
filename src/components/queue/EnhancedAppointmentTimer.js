@@ -31,6 +31,7 @@ import {
 // Functional Components
 import { finishCustomerAppointment } from "src/utils/employeeAvailability";
 import { acceptCustomerCheckIn } from "src/utils/employeeAvailability";
+import DurationSelectionDialog from "src/components/DurationSelectionDialog";
 
 // Constants
 const APPOINTMENT_STATUS = {
@@ -78,6 +79,10 @@ const EnhancedAppointmentTimer = ({
   onAppointmentFinished,
 }) => {
   // State management
+  const [isDurationDialogOpen, setIsDurationDialogOpen] = useState(false);
+  const [appointmentForDuration, setAppointmentForDuration] = useState(null);
+  // Ref to track appointments we've shown the dialog for
+
   const [timeLeft, setTimeLeft] = useState(0);
   const [status, setStatus] = useState(APPOINTMENT_STATUS.WAITING);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -197,6 +202,17 @@ const EnhancedAppointmentTimer = ({
       if (error && error.code !== "PGRST116") throw error;
 
       if (data) {
+        // Check if this is a new appointment that just started and doesn't have duration set
+        const isNewAppointment =
+          data.status === "in_progress" &&
+          (!currentAppointment || data.id !== currentAppointment.id) &&
+          (!data.duration || data.duration === 0); // Check if duration is not set
+
+        if (isNewAppointment) {
+          setAppointmentForDuration(data);
+          setIsDurationDialogOpen(true);
+        }
+
         setCurrentAppointment(data);
         updateStatus(data);
       } else {
@@ -208,6 +224,13 @@ const EnhancedAppointmentTimer = ({
       setCurrentAppointment(null);
       updateStatus(null);
     }
+  };
+
+  const handleDurationSet = async (updatedAppointment) => {
+    setIsDurationDialogOpen(false);
+    setAppointmentForDuration(null);
+    // Optionally refresh the appointment data
+    await fetchCurrentAppointment();
   };
 
   const handleCheckInNext = async () => {
@@ -351,6 +374,11 @@ const EnhancedAppointmentTimer = ({
       console.error("Error finishing appointment:", error);
       toast.error("Failed to complete appointment");
     }
+  };
+
+  const handleDialogClose = () => {
+    setIsDurationDialogOpen(false);
+    setAppointmentForDuration(null);
   };
 
   // UI helpers
@@ -696,6 +724,14 @@ const EnhancedAppointmentTimer = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DurationSelectionDialog
+        isOpen={isDurationDialogOpen}
+        onClose={handleDialogClose}
+        appointmentId={appointmentForDuration?.id}
+        onDurationSet={handleDurationSet}
+        defaultDuration={appointmentForDuration?.duration?.toString() || "30"}
+      />
     </>
   );
 };

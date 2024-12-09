@@ -109,6 +109,8 @@ export const handleEmployeeCheckIn = async (employeeId, facilityId) => {
         .select("*, services(duration)")
         .eq("facility_id", facilityId)
         .eq("status", "waiting")
+        .not("service_id", "eq", "8ee040e3-1983-4f13-a432-c7644724fb1a") // Exclude pedicure service
+        .or("is_combo.is.null,is_combo.eq.false") // Only include non-combo services
         .order("created_at", { ascending: true })
         .limit(1)
         .single();
@@ -257,10 +259,61 @@ export const processCustomerArrival = async (customerData, facilityId) => {
         dailyQueue = newQueue;
       }
 
-      // Inside processCustomerArrival function, after getting daily queue:
+      // Check for pedicure service availability if applicable
+      if (customerData.service_id === "8ee040e3-1983-4f13-a432-c7644724fb1a") {
+        // Get facility's total pedicure chairs
+        const { data: facility, error: facilityError } = await supabase
+          .from("facilities")
+          .select("pedicure_chairs")
+          .eq("id", facilityId)
+          .single();
 
+        if (facilityError) throw facilityError;
+
+        // Get current and upcoming pedicure appointments
+        const { data: activeAppointments, error: appointmentsError } =
+          await supabase
+            .from("appointments")
+            .select("*")
+            .eq("facility_id", facilityId)
+            .eq("service_id", "8ee040e3-1983-4f13-a432-c7644724fb1a")
+            .or(`status.eq.in_progress,status.eq.scheduled`)
+            .gte("end_time", now.toISOString());
+
+        if (appointmentsError) throw appointmentsError;
+
+        // Check if we have available chairs
+        if (activeAppointments.length >= facility.pedicure_chairs) {
+          // No chairs available, add to queue
+          const { data: queueEntry, error: queueError } = await supabase
+            .from("customer_queue")
+            .insert({
+              facility_id: facilityId,
+              customer_name: customerData.customer_name,
+              contact_info: customerData.contact_info,
+              service_id: customerData.service_id,
+              status: "waiting",
+            })
+            .select()
+            .single();
+
+          if (queueError) throw queueError;
+
+          await supabase.rpc("commit_transaction");
+          return {
+            type: "ADDED_TO_QUEUE",
+            data: {
+              ...queueEntry,
+              reason: "NO_CHAIRS_AVAILABLE",
+              queue_position:
+                activeAppointments.length - facility.pedicure_chairs + 1,
+            },
+          };
+        }
+      }
+
+      // Process round progression if needed
       if (dailyQueue.current_position === 0) {
-        // Check for available employees in current round
         const { data: availableInCurrentRound } = await supabase
           .from("employee_queue")
           .select("*")
@@ -270,7 +323,6 @@ export const processCustomerArrival = async (customerData, facilityId) => {
           .is("current_customer_id", null);
 
         if (!availableInCurrentRound?.length) {
-          // No available employees in current round, move to next round
           const nextRound = dailyQueue.current_round + 1;
 
           // Update daily queue to next round
@@ -285,7 +337,6 @@ export const processCustomerArrival = async (customerData, facilityId) => {
 
           if (updateError) throw updateError;
 
-          // Update daily queue reference
           dailyQueue = {
             ...dailyQueue,
             current_round: nextRound,
@@ -293,7 +344,6 @@ export const processCustomerArrival = async (customerData, facilityId) => {
             initial_round_completed: true,
           };
 
-          // Update only round number for all active employees
           const { error: empUpdateError } = await supabase
             .from("employee_queue")
             .update({
@@ -306,9 +356,7 @@ export const processCustomerArrival = async (customerData, facilityId) => {
         }
       }
 
-      // Continue with existing logic to find available employee...
-
-      // Get all employees in current round with their positions and current status
+      // Get employees in current round
       const { data: employeesInRound, error: empError } = await supabase
         .from("employee_queue")
         .select(
@@ -330,14 +378,13 @@ export const processCustomerArrival = async (customerData, facilityId) => {
 
       if (empError) throw empError;
 
-      // Find next available employee after the last appointment position
+      // Find next available employee
       const availableEmployee = employeesInRound?.find(
         (emp) =>
           emp.current_customer_id === null &&
           emp.position_in_queue > dailyQueue.current_position
       );
 
-      // If no employee found after current position, wrap around to the beginning
       const firstAvailableEmployee = !availableEmployee
         ? employeesInRound?.find((emp) => emp.current_customer_id === null)
         : null;
@@ -402,27 +449,23 @@ export const processCustomerArrival = async (customerData, facilityId) => {
         );
 
         if (remainingAvailable.length === 0) {
-          // All employees in current round are busy, start new round
           const nextRound = dailyQueue.current_round + 1;
 
-          // For each employee in the current round, calculate their position in the next round
           const positionUpdates = employeesInRound.map((emp, index) => ({
             id: emp.id,
             next_round_position: index + 1,
             queue_round: nextRound,
           }));
 
-          // Update daily queue to next round and reset position
           await supabase
             .from("daily_facility_queue")
             .update({
               current_round: nextRound,
-              current_position: 0, // Reset position for new round
+              current_position: 0,
               initial_round_completed: true,
             })
             .eq("id", dailyQueue.id);
 
-          // Update all employees for next round
           await Promise.all(
             positionUpdates.map((update) =>
               supabase
@@ -547,6 +590,8 @@ export const finishCustomerAppointment = async (
         .select("*, services(duration)")
         .eq("facility_id", facilityId)
         .eq("status", "waiting")
+        .not("service_id", "eq", "8ee040e3-1983-4f13-a432-c7644724fb1a") // Exclude pedicure service
+        .or("is_combo.is.null,is_combo.eq.false") // Only include non-combo services
         .order("created_at", { ascending: true })
         .limit(1)
         .single();

@@ -272,9 +272,8 @@ const ReceptionDashboard = () => {
         <EmployeeQueueDisplay className="mb-10" facilityId={userFacilityId} />
       )}
 
-      {process.env.NODE_ENV === "development" && (
-        <QueueTester facilityId={userFacilityId} />
-      )}
+      <QueueTester facilityId={userFacilityId} />
+
       {userFacilityId && <PedicureStatusDisplay facilityId={userFacilityId} />}
       <WaitingCustomersDisplay />
       <Card className="w-full">

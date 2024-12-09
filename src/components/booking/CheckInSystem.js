@@ -100,44 +100,88 @@ const CheckIn = () => {
     try {
       const now = new Date().toISOString();
 
-      const { data, error: appointmentError } = await supabase
-        .from("appointments")
-        .update({ arrival_time: now })
-        .eq("id", searchResult.id)
-        .select(
+      // Start a Supabase transaction
+      const client = await supabase.rpc("begin_transaction");
+
+      try {
+        // First, update the main appointment
+        const { data, error: appointmentError } = await supabase
+          .from("appointments")
+          .update({ arrival_time: now })
+          .eq("id", searchResult.id)
+          .select(
+            `
+            *,
+            services (name, duration),
+            employees (
+              table_number,
+              users (first_name, last_name)
+            )
           `
-          *,
-          services (name, duration),
-          employees (
-            table_number,
-            users (first_name, last_name)
           )
-        `
-        )
-        .single();
+          .single();
 
-      if (appointmentError) throw appointmentError;
+        if (appointmentError) throw appointmentError;
 
-      // Update employee queue to show the employee is now busy
-      const { error: queueError } = await supabase
-        .from("employee_queue")
-        .update({
-          current_customer_id: data.id,
-          last_assignment_time: now,
-        })
-        .eq("employee_id", data.employee_id);
+        // Update employee queue for the main appointment
+        const { error: queueError } = await supabase
+          .from("employee_queue")
+          .update({
+            current_customer_id: data.id,
+            last_assignment_time: now,
+          })
+          .eq("employee_id", data.employee_id);
 
-      if (queueError) throw queueError;
+        if (queueError) throw queueError;
 
-      setSearchResult({
-        ...data,
-        service_name: data.services.name,
-        employee_name: `${data.employees.users.first_name} ${data.employees.users.last_name}`,
-        table_number: data.employees.table_number,
-      });
+        // If this is a combo appointment, add customer to queue for pedicure
+        if (data.is_combo) {
+          // Find pedicure service ID
+          const { data: pedicureService, error: serviceError } = await supabase
+            .from("services")
+            .select("id")
+            .ilike("name", "%pedikúra%")
+            .single();
 
-      toast.success("Check-in bol úspešný!");
-      setStep("activeAppointment");
+          if (serviceError) throw serviceError;
+
+          // Add to customer queue for pedicure
+          const { error: customerQueueError } = await supabase
+            .from("customer_queue")
+            .insert({
+              facility_id: data.facility_id,
+              customer_name: data.customer_name,
+              contact_info: data.email || data.phone,
+              service_id: pedicureService.id,
+              status: "waiting",
+              created_at: now,
+              is_combo: true, // Flag to identify this is part of a combo
+            });
+
+          if (customerQueueError) throw customerQueueError;
+        }
+
+        await supabase.rpc("commit_transaction");
+
+        setSearchResult({
+          ...data,
+          service_name: data.services.name,
+          employee_name: `${data.employees.users.first_name} ${data.employees.users.last_name}`,
+          table_number: data.employees.table_number,
+        });
+
+        // Show different success messages based on whether it's a combo
+        toast.success(
+          data.is_combo
+            ? "Check-in úspešný! Pedikúra bola pridaná do čakajúceho radu."
+            : "Check-in bol úspešný!"
+        );
+
+        setStep("activeAppointment");
+      } catch (error) {
+        await supabase.rpc("rollback_transaction");
+        throw error;
+      }
     } catch (error) {
       console.error("Error during check-in:", error);
       toast.error("Nepodarilo sa vykonať check-in. Skúste to prosím znova.");
@@ -156,39 +200,109 @@ const CheckIn = () => {
   const handleWalkInSubmit = async (customerData) => {
     setIsLoading(true);
     try {
-      const walkInData = {
-        ...customerData,
-        service_id: selectedService.id,
+      // Base data for services
+      const baseData = {
+        customer_name: customerData.customer_name,
+        contact_info: customerData.contact_info,
         facility_id: selectedFacility.id,
       };
 
-      const result = await processCustomerArrival(
-        walkInData,
-        selectedFacility.id
-      );
+      if (selectedService.isCombined) {
+        // Handle combined Manikura + Pedikura service
+        const manikuraData = {
+          ...baseData,
+          service_id: selectedService.id,
+        };
 
-      if (!result || !result.type) {
-        throw new Error("Invalid response from processCustomerArrival");
-      }
+        const pedikuraData = {
+          ...baseData,
+          service_id: selectedService.secondaryServiceId,
+        };
 
-      switch (result.type) {
-        case "APPOINTMENT_CREATED":
-        case "IMMEDIATE_ASSIGNMENT":
-          setSearchResult(result.data);
-          setStep("activeAppointment");
-          toast.success("Vytvorená okamžitá rezervácia!");
-          break;
-        case "ADDED_TO_QUEUE":
-          setQueuePosition(result.data.queue_position);
-          setStep("inQueue");
-          toast.success("Pridané do čakajúceho radu!");
-          break;
-        default:
-          throw new Error(`Unknown result type: ${result.type}`);
+        // First process manikura
+        const manikuraResult = await processCustomerArrival(
+          manikuraData,
+          selectedFacility.id
+        );
+
+        if (!manikuraResult || manikuraResult.type === "ERROR") {
+          throw new Error(
+            manikuraResult?.error || "Failed to process manikura service"
+          );
+        }
+
+        // Always add pedikura to queue
+        const { data: queueEntry, error: queueError } = await supabase
+          .from("customer_queue")
+          .insert({
+            facility_id: selectedFacility.id,
+            customer_name: customerData.customer_name,
+            contact_info: customerData.contact_info,
+            service_id: selectedService.secondaryServiceId,
+            status: "waiting",
+          })
+          .select()
+          .single();
+
+        if (queueError) throw queueError;
+
+        // Handle the combined result based on manikura's status
+        switch (manikuraResult.type) {
+          case "IMMEDIATE_ASSIGNMENT":
+            setSearchResult(manikuraResult.data);
+            setStep("activeAppointment");
+            toast.success(
+              "Manikúra bola vytvorená okamžite a pedikúra pridaná do radu!"
+            );
+            break;
+
+          case "ADDED_TO_QUEUE":
+            setQueuePosition(manikuraResult.data.queue_position);
+            setStep("inQueue");
+            toast.success("Obe služby boli pridané do čakajúceho radu!");
+            break;
+
+          default:
+            throw new Error(`Unexpected result type: ${manikuraResult.type}`);
+        }
+      } else {
+        // Handle single service
+        const walkInData = {
+          ...baseData,
+          service_id: selectedService.id,
+        };
+
+        const result = await processCustomerArrival(
+          walkInData,
+          selectedFacility.id
+        );
+
+        if (!result || result.type === "ERROR") {
+          throw new Error(result?.error || "Failed to process service");
+        }
+
+        switch (result.type) {
+          case "IMMEDIATE_ASSIGNMENT":
+            setSearchResult(result.data);
+            setStep("activeAppointment");
+            toast.success("Vytvorená okamžitá rezervácia!");
+            break;
+
+          case "ADDED_TO_QUEUE":
+            setQueuePosition(result.data.queue_position);
+            setStep("inQueue");
+            toast.success("Pridané do čakajúceho radu!");
+            break;
+
+          default:
+            throw new Error(`Unknown result type: ${result.type}`);
+        }
       }
     } catch (error) {
       console.error("Error processing walk-in:", error);
-      toast.error("Nepodarilo sa spracovať požiadavku");
+      toast.error(
+        error.message || "Nepodarilo sa spracovať požiadavku. Skúste to znova."
+      );
     } finally {
       setIsLoading(false);
       setIsWalkInDialogOpen(false);

@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { format } from "date-fns";
-import { toast } from "react-hot-toast";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { User, Clock, CheckCircle, AlertCircle, Timer } from "lucide-react";
+import { User, Clock, CheckCircle, AlertCircle } from "lucide-react";
 
 import {
   Dialog,
@@ -15,25 +13,9 @@ import {
 import { Button } from "src/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "src/components/ui/radio-group";
 import { Label } from "src/components/ui/label";
-import { Input } from "src/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "src/components/ui/select";
-import { supabase } from "src/supabaseClient";
 import { cn } from "src/lib/utils";
-
-const DURATION_PRESETS = [
-  { value: "10", label: "10 min" },
-  { value: "15", label: "15 min" },
-  { value: "20", label: "20 min" },
-  { value: "30", label: "30 min" },
-  { value: "45", label: "45 min" },
-  { value: "60", label: "60 min" },
-];
+import { toast } from "react-hot-toast";
+import { supabase } from "../../supabaseClient";
 
 const AssignEmployeeDialog = ({
   open,
@@ -44,22 +26,34 @@ const AssignEmployeeDialog = ({
 }) => {
   const [availableEmployees, setAvailableEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [duration, setDuration] = useState("30"); // default 30 minutes
-  const [isCustomDuration, setIsCustomDuration] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
+  const [serviceDetails, setServiceDetails] = useState(null);
+
+  React.useEffect(() => {
     if (open && facilityId) {
       fetchAvailableEmployees();
+      if (customer?.service_id) {
+        fetchServiceDetails(customer.service_id);
+      }
     }
-  }, [open, facilityId]);
+  }, [open, facilityId, customer?.service_id]);
 
-  useEffect(() => {
-    // If we have a service duration from the customer, set it as initial value
-    if (customer?.service?.duration) {
-      setDuration(customer.service.duration.toString());
+  const fetchServiceDetails = async (serviceId) => {
+    try {
+      const { data, error } = await supabase
+        .from("services")
+        .select("*")
+        .eq("id", serviceId)
+        .single();
+
+      if (error) throw error;
+      setServiceDetails(data);
+    } catch (error) {
+      console.error("Error fetching service details:", error);
+      toast.error("Failed to fetch service details");
     }
-  }, [customer]);
+  };
 
   const fetchAvailableEmployees = async () => {
     try {
@@ -89,13 +83,25 @@ const AssignEmployeeDialog = ({
   };
 
   const handleAssignment = async () => {
-    if (!selectedEmployee || !customer || !duration) return;
+    if (!selectedEmployee || !customer) return;
 
     setIsLoading(true);
     try {
+      // Fetch service details if not already available
+      if (!serviceDetails) {
+        const { data: service, error: serviceError } = await supabase
+          .from("services")
+          .select("*")
+          .eq("id", customer.service_id)
+          .single();
+
+        if (serviceError) throw serviceError;
+        setServiceDetails(service);
+      }
+
       const now = new Date();
-      const durationInMinutes = parseInt(duration);
-      const endTime = new Date(now.getTime() + durationInMinutes * 60000);
+      const duration = serviceDetails?.duration || 30; // fallback to 30 minutes if no duration
+      const endTime = new Date(now.getTime() + duration * 60000);
 
       // Create appointment
       const { data: appointment, error: appointmentError } = await supabase
@@ -114,8 +120,7 @@ const AssignEmployeeDialog = ({
           start_time: now.toISOString(),
           end_time: endTime.toISOString(),
           status: "in_progress",
-          arrival_time: now.toISOString(),
-          duration: durationInMinutes, // Store the actual duration used
+          arrival_time: customer.created_at,
         })
         .select()
         .single();
@@ -152,65 +157,17 @@ const AssignEmployeeDialog = ({
     }
   };
 
-  const handleDurationChange = (value) => {
-    if (value === "custom") {
-      setIsCustomDuration(true);
-      setDuration("");
-    } else {
-      setIsCustomDuration(false);
-      setDuration(value);
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Assign Customer to Employee</DialogTitle>
+          <DialogTitle>Priradiť zákazníka</DialogTitle>
           <DialogDescription>
-            Select an available employee and set service duration
+            Vyberte dostupného zamestnanca pre zákazníka
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-4 space-y-6">
-          {/* Duration Selection */}
-          <div className="space-y-2">
-            <Label>Service Duration</Label>
-            <div className="flex gap-2 items-center">
-              <Select
-                value={isCustomDuration ? "custom" : duration}
-                onValueChange={handleDurationChange}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Select duration" />
-                </SelectTrigger>
-                <SelectContent>
-                  {DURATION_PRESETS.map((preset) => (
-                    <SelectItem key={preset.value} value={preset.value}>
-                      {preset.label}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="custom">Custom duration</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {isCustomDuration && (
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    className="w-24"
-                    min="1"
-                    max="120"
-                  />
-                  <span className="text-sm text-gray-500">min</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Employee Selection */}
+        <div className="py-4">
           {availableEmployees.length > 0 ? (
             <RadioGroup
               value={selectedEmployee?.id}
@@ -242,7 +199,7 @@ const AssignEmployeeDialog = ({
                       </span>
                     </div>
                     <span className="text-sm text-gray-500">
-                      Table #{employee.employees.table_number}
+                      Stôl č.{employee.employees.table_number}
                     </span>
                   </Label>
                 </div>
@@ -252,7 +209,7 @@ const AssignEmployeeDialog = ({
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <AlertCircle className="h-8 w-8 text-yellow-500 mb-2" />
               <p className="text-gray-600">
-                No employees available at the moment
+                Momentálne nie sú dostupní žiadni zamestnanci{" "}
               </p>
             </div>
           )}
@@ -260,11 +217,11 @@ const AssignEmployeeDialog = ({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isLoading}>
-            Cancel
+            Zrušiť
           </Button>
           <Button
             onClick={handleAssignment}
-            disabled={!selectedEmployee || !duration || isLoading}
+            disabled={!selectedEmployee || isLoading}
             className="bg-pink-500 hover:bg-pink-600"
           >
             {isLoading ? (
@@ -278,7 +235,7 @@ const AssignEmployeeDialog = ({
             ) : (
               <CheckCircle className="h-4 w-4 mr-2" />
             )}
-            Assign Customer
+            Priradiť zákazníka
           </Button>
         </DialogFooter>
       </DialogContent>

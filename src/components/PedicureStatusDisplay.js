@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Armchair, User, Clock, AlertCircle } from "lucide-react";
+import { Armchair, User, Clock, AlertCircle, Edit2 } from "lucide-react";
 import { format } from "date-fns";
 import { sk } from "date-fns/locale";
 import {
@@ -9,16 +9,74 @@ import {
   CardContent,
 } from "src/components/ui/card";
 import { Badge } from "src/components/ui/badge";
+import { Button } from "src/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "src/components/ui/dialog";
+import { Input } from "src/components/ui/input";
+import { toast } from "react-hot-toast";
 import { supabase } from "../supabaseClient";
 
 // Pedicure service ID constant
 const PEDICURE_SERVICE_ID = "8ee040e3-1983-4f13-a432-c7644724fb1a";
+
+const ChairGrid = ({ totalChairs, activeAppointments }) => {
+  // Create array of chair numbers from 1 to totalChairs
+  const chairs = Array.from({ length: totalChairs }, (_, i) => i + 1);
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-6 bg-gray-50 rounded-lg mb-6">
+      {chairs.map((chairNumber) => {
+        // Consider chair occupied if we have an active appointment for this position
+        const appointment =
+          chairNumber <= activeAppointments.length
+            ? activeAppointments[chairNumber - 1]
+            : null;
+        const isOccupied = !!appointment;
+
+        return (
+          <div
+            key={chairNumber}
+            className="flex flex-col items-center space-y-2"
+          >
+            <div className="relative group">
+              <Armchair
+                className={`w-12 h-12 ${
+                  isOccupied ? "text-red-500" : "text-green-500"
+                } transition-colors duration-200`}
+              />
+              <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-sm font-medium">
+                {chairNumber}
+              </span>
+              {isOccupied && appointment.customer_name && (
+                <div
+                  className="absolute -top-8 left-1/2 transform -translate-x-1/2 
+                               bg-gray-800 text-white text-xs rounded px-2 py-1 
+                               opacity-0 group-hover:opacity-100 transition-opacity 
+                               whitespace-nowrap z-10"
+                >
+                  {appointment.customer_name}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 const PedicureStatusDisplay = ({ facilityId }) => {
   const [activeAppointments, setActiveAppointments] = useState([]);
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [totalChairs, setTotalChairs] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchFacilityInfo();
@@ -39,6 +97,7 @@ const PedicureStatusDisplay = ({ facilityId }) => {
       setTotalChairs(data.pedicure_chairs);
     } catch (error) {
       console.error("Error fetching facility info:", error);
+      toast.error("Nepodarilo sa načítať informácie o zariadení");
     }
   };
 
@@ -86,6 +145,7 @@ const PedicureStatusDisplay = ({ facilityId }) => {
       setUpcomingAppointments(upcoming || []);
     } catch (error) {
       console.error("Error fetching appointments:", error);
+      toast.error("Nepodarilo sa načítať rezervácie");
     } finally {
       setIsLoading(false);
     }
@@ -109,22 +169,9 @@ const PedicureStatusDisplay = ({ facilityId }) => {
     return () => supabase.removeChannel(subscription);
   };
 
-  const getAvailabilityDisplay = () => {
-    const occupiedChairs = activeAppointments.length;
-    const availableChairs = totalChairs - occupiedChairs;
-    const availabilityColor =
-      availableChairs === 0 ? "text-red-500" : "text-green-500";
-
-    return (
-      <div className="flex items-center space-x-2 mb-4">
-        <Badge variant="outline" className={`text-base ${availabilityColor}`}>
-          {availableChairs} / {totalChairs} voľných stoličiek
-        </Badge>
-        {availableChairs === 0 && (
-          <AlertCircle className="h-5 w-5 text-red-500" />
-        )}
-      </div>
-    );
+  const handleChairUpdate = (newChairCount) => {
+    setTotalChairs(newChairCount);
+    fetchAppointments(); // Refresh appointments after chair update
   };
 
   if (isLoading) {
@@ -137,17 +184,35 @@ const PedicureStatusDisplay = ({ facilityId }) => {
     );
   }
 
+  const availableChairs = totalChairs - activeAppointments.length;
+
   return (
     <Card className="mb-6">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-xl font-bold text-pink-700 flex items-center">
-          <Armchair className="mr-2" />
-          Pedikúra
-        </CardTitle>
-        {getAvailabilityDisplay()}
+        <div className="flex items-center space-x-4">
+          <CardTitle className="text-xl font-bold text-pink-700 flex items-center">
+            <Armchair className="mr-2" />
+            Pedikúra
+          </CardTitle>
+        </div>
+        <Badge
+          variant="outline"
+          className={`text-base ${
+            availableChairs === 0 ? "text-red-500" : "text-green-500"
+          }`}
+        >
+          {availableChairs} / {totalChairs} voľných stoličiek
+        </Badge>
       </CardHeader>
+
       <CardContent>
         <div className="space-y-6">
+          {/* Chair Grid */}
+          <ChairGrid
+            totalChairs={totalChairs}
+            activeAppointments={activeAppointments}
+          />
+
           {/* Active Appointments */}
           <div>
             <h3 className="text-lg font-semibold mb-3 text-gray-700">
@@ -177,6 +242,11 @@ const PedicureStatusDisplay = ({ facilityId }) => {
                           {appointment.employees?.users?.first_name}{" "}
                           {appointment.employees?.users?.last_name}
                         </div>
+                        {appointment.chair_number && (
+                          <div className="text-sm text-gray-600">
+                            Stolička č. {appointment.chair_number}
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
