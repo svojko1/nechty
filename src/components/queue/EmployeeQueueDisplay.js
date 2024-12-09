@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { format, isBefore } from "date-fns";
+import { format, isBefore, isToday } from "date-fns";
 import { sk } from "date-fns/locale";
 import {
   Users,
@@ -81,14 +81,18 @@ const StatCard = ({
 );
 
 const EarningsDialog = ({ isOpen, onClose, appointments }) => {
-  // Find earliest and latest appointments
-  const generateTimeRange = () => {
-    if (!appointments.length) return [];
+  // Filter only today's appointments
+  const todayAppointments = appointments.filter((app) =>
+    isToday(new Date(app.end_time))
+  );
 
-    // Find earliest and latest times
-    const times = appointments.map((app) => new Date(app.start_time));
-    const earliest = new Date(Math.min(...times));
-    const latest = new Date(Math.max(...times));
+  const generateTimeRange = () => {
+    if (!todayAppointments.length) return [];
+
+    // Set range from 00:00 to current time for today
+    const today = new Date();
+    const earliest = new Date(today.setHours(0, 0, 0, 0));
+    const latest = new Date();
 
     // Round earliest down to nearest 30 minutes
     earliest.setMinutes(Math.floor(earliest.getMinutes() / 30) * 30, 0, 0);
@@ -110,8 +114,8 @@ const EarningsDialog = ({ isOpen, onClose, appointments }) => {
 
   const timeSlots = generateTimeRange();
 
-  // Rest of your existing grouping logic
-  const groupedAppointments = appointments.reduce((acc, app) => {
+  // Group appointments by time slots and employees
+  const groupedAppointments = todayAppointments.reduce((acc, app) => {
     const appTime = new Date(app.start_time);
     const hours = appTime.getHours();
     const minutes = appTime.getMinutes();
@@ -131,14 +135,16 @@ const EarningsDialog = ({ isOpen, onClose, appointments }) => {
     return acc;
   }, {});
 
-  // Get unique employee names
+  // Get unique employee names from today's appointments
   const employees = [
-    ...new Set(appointments.map((app) => app.employees?.users?.first_name)),
+    ...new Set(
+      todayAppointments.map((app) => app.employees?.users?.first_name)
+    ),
   ]
     .filter(Boolean)
     .sort();
 
-  // Calculate totals for each employee
+  // Calculate totals for each employee (only today)
   const employeeTotals = employees.reduce((acc, emp) => {
     acc[emp] = timeSlots.reduce(
       (sum, slot) => sum + (groupedAppointments[slot]?.[emp] || 0),
@@ -147,20 +153,20 @@ const EarningsDialog = ({ isOpen, onClose, appointments }) => {
     return acc;
   }, {});
 
-  // Calculate grand total
+  // Calculate grand total for today
   const grandTotal = Object.values(employeeTotals).reduce(
     (sum, total) => sum + total,
     0
   );
 
-  if (!appointments.length) {
+  if (!todayAppointments.length) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Detail dnešných tržieb</DialogTitle>
           </DialogHeader>
-          <div className="text-center py-4">No appointments for today</div>
+          <div className="text-center py-4">Žiadne tržby pre dnešný deň</div>
         </DialogContent>
       </Dialog>
     );

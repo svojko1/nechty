@@ -192,6 +192,35 @@ const AdminDashboard = () => {
     }
   };
 
+  const checkTableNumberAvailability = async (
+    tableNumber,
+    facilityId,
+    excludeEmployeeId = null
+  ) => {
+    try {
+      let query = supabase
+        .from("employees")
+        .select("id")
+        .eq("facility_id", facilityId)
+        .eq("table_number", tableNumber);
+
+      // If we're updating an existing employee, exclude them from the check
+      if (excludeEmployeeId) {
+        query = query.neq("id", excludeEmployeeId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // If we find any employees with this table number, it's not available
+      return data.length === 0;
+    } catch (error) {
+      console.error("Error checking table number availability:", error);
+      throw error;
+    }
+  };
+
   const fetchStats = async () => {
     try {
       const { data: usersCount } = await supabase
@@ -245,7 +274,7 @@ const AdminDashboard = () => {
       }
 
       // If role is employee, use the employee registration endpoint
-      if (newUser.role === "employee") {
+      if (newUser.role === "employee" && newUser.table_number) {
         if (
           !newUser.email ||
           !newUser.password ||
@@ -253,6 +282,19 @@ const AdminDashboard = () => {
           !newUser.last_name
         ) {
           toast.error("Please fill in all required fields");
+          setLoading(false);
+          return;
+        }
+
+        const isTableAvailable = await checkTableNumberAvailability(
+          newUser.table_number,
+          newUser.facility_id
+        );
+
+        if (!isTableAvailable) {
+          toast.error(
+            `Stôl číslo ${newUser.table_number} je už obsadený iným zamestnancom`
+          );
           setLoading(false);
           return;
         }
@@ -404,6 +446,20 @@ const AdminDashboard = () => {
     e.preventDefault();
     setLoading(true);
     try {
+      // Check if table number is available
+      const isTableAvailable = await checkTableNumberAvailability(
+        editingEmployee.table_number,
+        editingEmployee.facility_id,
+        editingEmployee.id
+      );
+
+      if (!isTableAvailable) {
+        toast.error(
+          `Stôl číslo ${editingEmployee.table_number} je už obsadený iným zamestnancom`
+        );
+        setLoading(false);
+        return;
+      }
       const { error: userError } = await supabase
         .from("users")
         .update({

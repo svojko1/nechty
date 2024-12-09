@@ -13,6 +13,7 @@ import { Button } from "./components/ui/button";
 import { cn } from "./lib/utils";
 import { supabase } from "./supabaseClient";
 import { toast } from "react-hot-toast";
+import { Toaster } from "react-hot-toast";
 import { RotateCw } from "lucide-react";
 
 // Import components
@@ -328,6 +329,7 @@ function App() {
               </Routes>
             </KioskRouteGuard>
           </Layout>
+          <Toaster position="top-center" /> {/* Add this line */}
         </Router>
       </LanguageProvider>
     </FacilityProvider>
