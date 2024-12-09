@@ -373,16 +373,6 @@ const EmployeeQueueDisplay = ({ facilityId }) => {
   const getEmployeeStatus = (employee) => {
     const now = new Date();
 
-    if (
-      employee.break_start &&
-      (!employee.break_end || new Date(employee.break_end) > now)
-    ) {
-      return {
-        badge: <Badge className="bg-yellow-500">Na prestávke</Badge>,
-        endTime: employee.break_end,
-      };
-    }
-
     if (employee.current_appointment) {
       const appointmentEnd = new Date(employee.current_appointment.end_time);
       const isOvertime = isBefore(appointmentEnd, now);
@@ -426,19 +416,14 @@ const EmployeeQueueDisplay = ({ facilityId }) => {
       </CardHeader>
 
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <StatCard
             icon={UserCheck}
             title="Aktívni"
             value={`${stats.activeEmployees}/${stats.totalEmployees}`}
             bgColor="bg-pink-50"
           />
-          <StatCard
-            icon={Coffee}
-            title="Na prestávke"
-            value={stats.onBreakEmployees}
-            bgColor="bg-yellow-50"
-          />
+
           <StatCard
             icon={Clock}
             title="Obsadení"

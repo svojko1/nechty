@@ -271,11 +271,9 @@ const ReceptionDashboard = () => {
       {userFacilityId && (
         <EmployeeQueueDisplay className="mb-10" facilityId={userFacilityId} />
       )}
-
       <QueueTester facilityId={userFacilityId} />
-
       {userFacilityId && <PedicureStatusDisplay facilityId={userFacilityId} />}
-      <WaitingCustomersDisplay />
+      <WaitingCustomersDisplay facilityId={userFacilityId} />{" "}
       <Card className="w-full">
         <CardHeader>
           <div className="flex justify-between items-center">

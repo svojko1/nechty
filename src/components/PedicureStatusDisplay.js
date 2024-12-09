@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Armchair, User, Clock, AlertCircle, Edit2 } from "lucide-react";
-import { format } from "date-fns";
+import { Armchair, User, Clock, AlertCircle } from "lucide-react";
+import { format, startOfToday, endOfToday } from "date-fns";
 import { sk } from "date-fns/locale";
 import {
   Card,
@@ -9,30 +9,18 @@ import {
   CardContent,
 } from "src/components/ui/card";
 import { Badge } from "src/components/ui/badge";
-import { Button } from "src/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "src/components/ui/dialog";
-import { Input } from "src/components/ui/input";
-import { toast } from "react-hot-toast";
-import { supabase } from "../supabaseClient";
+import { supabase } from "src/supabaseClient";
+import toast from "react-hot-toast";
 
 // Pedicure service ID constant
 const PEDICURE_SERVICE_ID = "8ee040e3-1983-4f13-a432-c7644724fb1a";
 
 const ChairGrid = ({ totalChairs, activeAppointments }) => {
-  // Create array of chair numbers from 1 to totalChairs
   const chairs = Array.from({ length: totalChairs }, (_, i) => i + 1);
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-6 bg-gray-50 rounded-lg mb-6">
       {chairs.map((chairNumber) => {
-        // Consider chair occupied if we have an active appointment for this position
         const appointment =
           chairNumber <= activeAppointments.length
             ? activeAppointments[chairNumber - 1]
@@ -76,7 +64,6 @@ const PedicureStatusDisplay = ({ facilityId }) => {
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [totalChairs, setTotalChairs] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchFacilityInfo();
@@ -97,15 +84,16 @@ const PedicureStatusDisplay = ({ facilityId }) => {
       setTotalChairs(data.pedicure_chairs);
     } catch (error) {
       console.error("Error fetching facility info:", error);
-      toast.error("Nepodarilo sa načítať informácie o zariadení");
+      toast.error("Failed to load facility information");
     }
   };
 
   const fetchAppointments = async () => {
     try {
-      const now = new Date().toISOString();
+      const today = startOfToday();
+      const todayEnd = endOfToday();
 
-      // Fetch active pedicure appointments
+      // Fetch active pedicure appointments for today only
       const { data: active, error: activeError } = await supabase
         .from("appointments")
         .select(
@@ -118,11 +106,13 @@ const PedicureStatusDisplay = ({ facilityId }) => {
         .eq("facility_id", facilityId)
         .eq("status", "in_progress")
         .eq("service_id", PEDICURE_SERVICE_ID)
+        .gte("start_time", today.toISOString())
+        .lte("start_time", todayEnd.toISOString())
         .order("start_time", { ascending: true });
 
       if (activeError) throw activeError;
 
-      // Fetch upcoming pedicure appointments
+      // Fetch upcoming pedicure appointments for today only
       const { data: upcoming, error: upcomingError } = await supabase
         .from("appointments")
         .select(
@@ -135,7 +125,8 @@ const PedicureStatusDisplay = ({ facilityId }) => {
         .eq("facility_id", facilityId)
         .eq("service_id", PEDICURE_SERVICE_ID)
         .eq("status", "scheduled")
-        .gt("start_time", now)
+        .gt("start_time", new Date().toISOString())
+        .lte("start_time", todayEnd.toISOString())
         .order("start_time", { ascending: true })
         .limit(5);
 
@@ -145,7 +136,7 @@ const PedicureStatusDisplay = ({ facilityId }) => {
       setUpcomingAppointments(upcoming || []);
     } catch (error) {
       console.error("Error fetching appointments:", error);
-      toast.error("Nepodarilo sa načítať rezervácie");
+      toast.error("Failed to load appointments");
     } finally {
       setIsLoading(false);
     }
@@ -167,11 +158,6 @@ const PedicureStatusDisplay = ({ facilityId }) => {
       .subscribe();
 
     return () => supabase.removeChannel(subscription);
-  };
-
-  const handleChairUpdate = (newChairCount) => {
-    setTotalChairs(newChairCount);
-    fetchAppointments(); // Refresh appointments after chair update
   };
 
   if (isLoading) {
@@ -207,7 +193,6 @@ const PedicureStatusDisplay = ({ facilityId }) => {
 
       <CardContent>
         <div className="space-y-6">
-          {/* Chair Grid */}
           <ChairGrid
             totalChairs={totalChairs}
             activeAppointments={activeAppointments}
@@ -242,11 +227,6 @@ const PedicureStatusDisplay = ({ facilityId }) => {
                           {appointment.employees?.users?.first_name}{" "}
                           {appointment.employees?.users?.last_name}
                         </div>
-                        {appointment.chair_number && (
-                          <div className="text-sm text-gray-600">
-                            Stolička č. {appointment.chair_number}
-                          </div>
-                        )}
                       </div>
                     </CardContent>
                   </Card>
