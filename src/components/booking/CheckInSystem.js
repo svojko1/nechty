@@ -134,33 +134,6 @@ const CheckIn = () => {
 
         if (queueError) throw queueError;
 
-        // If this is a combo appointment, add customer to queue for pedicure
-        if (data.is_combo) {
-          // Find pedicure service ID
-          const { data: pedicureService, error: serviceError } = await supabase
-            .from("services")
-            .select("id")
-            .ilike("name", "%pedikúra%")
-            .single();
-
-          if (serviceError) throw serviceError;
-
-          // Add to customer queue for pedicure
-          const { error: customerQueueError } = await supabase
-            .from("customer_queue")
-            .insert({
-              facility_id: data.facility_id,
-              customer_name: data.customer_name,
-              contact_info: data.email || data.phone,
-              service_id: pedicureService.id,
-              status: "waiting",
-              created_at: now,
-              is_combo: true, // Flag to identify this is part of a combo
-            });
-
-          if (customerQueueError) throw customerQueueError;
-        }
-
         await supabase.rpc("commit_transaction");
 
         setSearchResult({
@@ -198,12 +171,15 @@ const CheckIn = () => {
   };
 
   const handleWalkInSubmit = async (customerData) => {
+    console.log("Received customer data:", customerData); // Check received data
+
     setIsLoading(true);
     try {
       // Base data for services
       const baseData = {
         customer_name: customerData.customer_name,
-        contact_info: customerData.contact_info,
+        email: customerData.email,
+        phone: customerData.phone,
         facility_id: selectedFacility.id,
       };
 
@@ -237,7 +213,8 @@ const CheckIn = () => {
           .insert({
             facility_id: selectedFacility.id,
             customer_name: customerData.customer_name,
-            contact_info: customerData.contact_info,
+            email: customerData.email,
+            phone: customerData.phone,
             service_id: selectedService.secondaryServiceId,
             status: "waiting",
           })
@@ -272,10 +249,13 @@ const CheckIn = () => {
           service_id: selectedService.id,
         };
 
+        console.log("Walkin data: ", walkInData);
         const result = await processCustomerArrival(
           walkInData,
           selectedFacility.id
         );
+
+        console.log("Process result:", result); // Check result
 
         if (!result || result.type === "ERROR") {
           throw new Error(result?.error || "Failed to process service");

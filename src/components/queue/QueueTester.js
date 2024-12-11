@@ -422,9 +422,10 @@ const QueueTester = ({ facilityId }) => {
       const customers = Array.from({ length: numCustomers }, () => ({
         customer_name: `Test Customer ${Math.floor(Math.random() * 1000)}`,
         contact_info: `test${Math.floor(Math.random() * 1000)}@example.com`,
-        service_id: selectedService,
+        service_id: selectedService.id,
         facility_id: facilityId,
         status: "waiting",
+        is_combo: selectedService.is_combo,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }));
@@ -664,12 +665,8 @@ const QueueTester = ({ facilityId }) => {
             .from("appointments")
             .insert({
               customer_name: selectedCustomer.customer_name,
-              email: selectedCustomer.contact_info.includes("@")
-                ? selectedCustomer.contact_info
-                : null,
-              phone: !selectedCustomer.contact_info.includes("@")
-                ? selectedCustomer.contact_info
-                : null,
+              email: selectedCustomer.email || null,
+              phone: selectedCustomer.phone || null,
               service_id: selectedCustomer.service_id,
               employee_id: employeeId,
               facility_id: selectedCustomer.facility_id,
@@ -731,7 +728,27 @@ const QueueTester = ({ facilityId }) => {
             className="w-32"
             placeholder="Number of customers"
           />
-          <Select value={selectedService} onValueChange={setSelectedService}>
+          <Select
+            value={selectedService}
+            onValueChange={(value) => {
+              // Find the service or create combo service if it's the combo option
+              const service = services.find((s) => s.id === value);
+              if (value === "combo") {
+                const manikuraService = services.find((s) =>
+                  s.name.toLowerCase().includes("manikúra")
+                );
+                if (manikuraService) {
+                  setSelectedService({
+                    ...manikuraService,
+                    name: "Manikúra + Pedikúra",
+                    is_combo: true,
+                  });
+                }
+              } else {
+                setSelectedService(service);
+              }
+            }}
+          >
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Vyberte službu" />
             </SelectTrigger>
@@ -741,6 +758,7 @@ const QueueTester = ({ facilityId }) => {
                   {service.name}
                 </SelectItem>
               ))}
+              <SelectItem value="combo">Manikúra + Pedikúra</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -789,7 +807,14 @@ const QueueTester = ({ facilityId }) => {
                     )}
                   </div>
                 </TableCell>
-                <TableCell>{customer.contact_info}</TableCell>
+                <TableCell>
+                  <div>
+                    {customer.email && <p>{customer.email}</p>}
+                    {customer.phone && (
+                      <p className="text-sm text-gray-500">{customer.phone}</p>
+                    )}
+                  </div>
+                </TableCell>{" "}
                 <TableCell>
                   {new Date(customer.created_at).toLocaleTimeString()}
                 </TableCell>

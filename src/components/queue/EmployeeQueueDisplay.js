@@ -89,10 +89,15 @@ const EarningsDialog = ({ isOpen, onClose, appointments }) => {
   const generateTimeRange = () => {
     if (!todayAppointments.length) return [];
 
-    // Set range from 00:00 to current time for today
+    // Set range from 08:00 to current time for today
     const today = new Date();
-    const earliest = new Date(today.setHours(0, 0, 0, 0));
+    const earliest = new Date(today.setHours(8, 0, 0, 0)); // Start at 8am
     const latest = new Date();
+
+    // If current time is before 8am, return empty array
+    if (latest < earliest) {
+      return [];
+    }
 
     // Round earliest down to nearest 30 minutes
     earliest.setMinutes(Math.floor(earliest.getMinutes() / 30) * 30, 0, 0);
@@ -123,7 +128,9 @@ const EarningsDialog = ({ isOpen, onClose, appointments }) => {
     appTime.setHours(hours, roundedMinutes, 0, 0);
 
     const timeSlot = format(appTime, "HH:mm", { locale: sk });
-    const empName = `${app.employees?.users?.first_name}`;
+    const empName = `${
+      app.employees?.users?.first_name
+    } ${app.employees?.users?.last_name.charAt(0)}.`;
 
     if (!acc[timeSlot]) {
       acc[timeSlot] = {};
@@ -138,18 +145,25 @@ const EarningsDialog = ({ isOpen, onClose, appointments }) => {
   // Get unique employee names from today's appointments
   const employees = [
     ...new Set(
-      todayAppointments.map((app) => app.employees?.users?.first_name)
+      todayAppointments.map((app) => {
+        const firstName = app.employees?.users?.first_name;
+        const lastName = app.employees?.users?.last_name;
+        // Create formatted name like "Silvia S."
+        return firstName && lastName
+          ? `${firstName} ${lastName.charAt(0)}.`
+          : "Unknown";
+      })
     ),
   ]
     .filter(Boolean)
     .sort();
-
   // Calculate totals for each employee (only today)
-  const employeeTotals = employees.reduce((acc, emp) => {
-    acc[emp] = timeSlots.reduce(
-      (sum, slot) => sum + (groupedAppointments[slot]?.[emp] || 0),
-      0
-    );
+  const employeeTotals = employees.reduce((acc, empName) => {
+    acc[empName] = timeSlots.reduce((sum, slot) => {
+      // Match employee by both first name and last name initial
+      const amount = groupedAppointments[slot]?.[empName] || 0;
+      return sum + amount;
+    }, 0);
     return acc;
   }, {});
 
@@ -480,6 +494,7 @@ const EmployeeQueueDisplay = ({ facilityId }) => {
                     {item.employees?.users?.first_name}{" "}
                     {item.employees?.users?.last_name}
                   </TableCell>
+
                   <TableCell>{item.employees?.table_number}</TableCell>
                   <TableCell>
                     {format(new Date(item.check_in_time), "HH:mm", {

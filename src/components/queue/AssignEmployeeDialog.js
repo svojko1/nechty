@@ -108,12 +108,8 @@ const AssignEmployeeDialog = ({
         .from("appointments")
         .insert({
           customer_name: customer.customer_name,
-          email: customer.contact_info.includes("@")
-            ? customer.contact_info
-            : null,
-          phone: !customer.contact_info.includes("@")
-            ? customer.contact_info
-            : null,
+          email: customer.email || null,
+          phone: customer.phone || null,
           service_id: customer.service_id,
           employee_id: selectedEmployee.employees.id,
           facility_id: facilityId,

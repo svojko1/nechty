@@ -259,6 +259,28 @@ export const processCustomerArrival = async (customerData, facilityId) => {
         dailyQueue = newQueue;
       }
 
+      const addPedicureToQueue = async () => {
+        // Find pedicure service
+        const { data: pedicureService } = await supabase
+          .from("services")
+          .select("id")
+          .ilike("name", "%pedikúra%")
+          .single();
+
+        if (pedicureService) {
+          // Always add pedicure to queue since it's a secondary service
+          await supabase.from("customer_queue").insert({
+            facility_id: facilityId,
+            customer_name: customerData.customer_name,
+            email: customerData.email || null, // Separate email field
+            phone: customerData.phone || null, // Separate phone field
+            service_id: pedicureService.id,
+            status: "waiting",
+            is_combo: true,
+          });
+        }
+      };
+
       // Check for pedicure service availability if applicable
       if (customerData.service_id === "8ee040e3-1983-4f13-a432-c7644724fb1a") {
         // Get facility's total pedicure chairs
@@ -290,9 +312,11 @@ export const processCustomerArrival = async (customerData, facilityId) => {
             .insert({
               facility_id: facilityId,
               customer_name: customerData.customer_name,
-              contact_info: customerData.contact_info,
+              email: customerData.email || null, // Separate email field
+              phone: customerData.phone || null, // Separate phone field
               service_id: customerData.service_id,
               status: "waiting",
+              is_combo: customerData.is_combo || false,
             })
             .select()
             .single();
@@ -406,12 +430,8 @@ export const processCustomerArrival = async (customerData, facilityId) => {
           .from("appointments")
           .insert({
             customer_name: customerData.customer_name,
-            email: customerData.contact_info.includes("@")
-              ? customerData.contact_info
-              : null,
-            phone: !customerData.contact_info.includes("@")
-              ? customerData.contact_info
-              : null,
+            email: customerData.email || null,
+            phone: customerData.phone || null,
             service_id: customerData.service_id,
             employee_id: selectedEmployee.employee_id,
             facility_id: facilityId,
@@ -424,6 +444,10 @@ export const processCustomerArrival = async (customerData, facilityId) => {
           .single();
 
         if (appointmentError) throw appointmentError;
+
+        if (customerData.is_combo) {
+          await addPedicureToQueue();
+        }
 
         // Update employee queue status
         await supabase
@@ -486,13 +510,16 @@ export const processCustomerArrival = async (customerData, facilityId) => {
         };
       }
 
+      console.log("Debug - Queue Insert Data:", customerData);
+
       // No available employees, add customer to queue
       const { data: queueEntry, error: queueError } = await supabase
         .from("customer_queue")
         .insert({
           facility_id: facilityId,
           customer_name: customerData.customer_name,
-          contact_info: customerData.contact_info,
+          email: customerData.email || null,
+          phone: customerData.phone || null,
           service_id: customerData.service_id,
           status: "waiting",
         })
@@ -500,6 +527,11 @@ export const processCustomerArrival = async (customerData, facilityId) => {
         .single();
 
       if (queueError) throw queueError;
+
+      // For combo services, add pedicure to queue
+      if (customerData.is_combo) {
+        await addPedicureToQueue();
+      }
 
       await supabase.rpc("commit_transaction");
       return {

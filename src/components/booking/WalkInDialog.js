@@ -1,8 +1,7 @@
 import React, { useState } from "react";
-
-import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
+import { toast } from "react-hot-toast";
 
 import {
   Dialog,
@@ -32,20 +31,41 @@ const WalkInDialog = ({
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // Only validate customer name
+    console.log("Form Data:", formData); // Check initial form data
+
     if (!formData.customerName.trim()) {
-      toast.error("Prosím, zadajte meno zákazníka");
+      toast.error("Please enter customer name");
       return;
     }
 
-    // Submit the data - email and phone are optional
-    onSubmit({
+    // Require at least one contact method
+    if (!formData.email && !formData.phone) {
+      toast.error("Please provide either email or phone number");
+      return;
+    }
+
+    // Validate email if provided
+    if (formData.email && !isValidEmail(formData.email)) {
+      toast.error("Please enter a valid email");
+      return;
+    }
+
+    // Validate phone if provided
+    if (formData.phone && !isValidPhone(formData.phone)) {
+      toast.error("Please enter a valid phone number");
+      return;
+    }
+
+    const submissionData = {
       customer_name: formData.customerName,
-      // Only include contact_info if either email or phone is provided
-      contact_info: formData.email || formData.phone || "",
+      email: formData.email || null,
+      phone: formData.phone || null,
       isCombo: selectedService?.isCombo || false,
       service_id: selectedService?.id,
-    });
+    };
+
+    console.log("Submission Data:", submissionData); // Check data being sent
+    onSubmit(submissionData);
   };
 
   const handleClose = () => {
@@ -57,22 +77,30 @@ const WalkInDialog = ({
     onOpenChange(false);
   };
 
+  const isValidEmail = (email) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const isValidPhone = (phone) => {
+    return /^\+?[\d\s-]{8,}$/.test(phone);
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Zadajte údaje</DialogTitle>
+          <DialogTitle>Customer Details</DialogTitle>
           <DialogDescription>
-            Vyplňte potrebné údaje pre pokračovanie.
+            Please provide customer information
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-4">
             {/* Customer Name - Required */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Meno*
+            <div className="grid gap-2">
+              <Label htmlFor="name">
+                Name <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="name"
@@ -80,17 +108,14 @@ const WalkInDialog = ({
                 onChange={(e) =>
                   setFormData({ ...formData, customerName: e.target.value })
                 }
-                className="col-span-3"
-                placeholder="Zadajte vaše meno"
+                placeholder="Enter customer name"
                 required
               />
             </div>
 
-            {/* Email - Optional */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right">
-                Email
-              </Label>
+            {/* Email */}
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -98,16 +123,13 @@ const WalkInDialog = ({
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
-                className="col-span-3"
-                placeholder="vas@email.com"
+                placeholder="customer@example.com"
               />
             </div>
 
-            {/* Phone - Optional */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="phone" className="text-right">
-                Telefón
-              </Label>
+            {/* Phone */}
+            <div className="grid gap-2">
+              <Label htmlFor="phone">Phone</Label>
               <Input
                 id="phone"
                 type="tel"
@@ -115,7 +137,6 @@ const WalkInDialog = ({
                 onChange={(e) =>
                   setFormData({ ...formData, phone: e.target.value })
                 }
-                className="col-span-3"
                 placeholder="+421 XXX XXX XXX"
               />
             </div>
@@ -128,11 +149,11 @@ const WalkInDialog = ({
               onClick={handleClose}
               disabled={isLoading}
             >
-              Zrušiť
+              Cancel
             </Button>
             <Button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !formData.customerName}
               className="bg-pink-500 hover:bg-pink-600"
             >
               {isLoading ? (
@@ -143,7 +164,7 @@ const WalkInDialog = ({
                   <Loader2 className="h-4 w-4" />
                 </motion.div>
               ) : (
-                "Rezervovať"
+                "Submit"
               )}
             </Button>
           </DialogFooter>

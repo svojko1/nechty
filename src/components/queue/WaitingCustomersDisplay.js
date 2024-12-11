@@ -165,7 +165,16 @@ const WaitingCustomersDisplay = ({ facilityId }) => {
                           <span>{calculateWaitTime(customer.created_at)}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{customer.contact_info}</TableCell>
+                      <TableCell>
+                        <div>
+                          {customer.email && <p>{customer.email}</p>}
+                          {customer.phone && (
+                            <p className="text-sm text-gray-500">
+                              {customer.phone}
+                            </p>
+                          )}
+                        </div>
+                      </TableCell>{" "}
                       <TableCell>
                         <Badge
                           variant="outline"
