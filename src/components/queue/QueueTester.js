@@ -384,6 +384,19 @@ const QueueTester = ({ facilityId }) => {
 
   // Action handlers
   const handleCheckIn = async (employeeId) => {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const currentTime = hours * 60 + minutes; // Convert to minutes
+
+    const startTime = 5 * 60; // 5:00 in minutes
+    const endTime = 21 * 60 + 30; // 21:30 in minutes
+
+    if (currentTime < startTime || currentTime > endTime) {
+      toast.error("Check-in je možný len medzi 5:00 a 21:30");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { error } = await handleEmployeeCheckIn(employeeId, facilityId);
