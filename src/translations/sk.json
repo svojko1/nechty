@@ -74,6 +74,10 @@
     "timer.customerArrived": "Zákazník prišiel",
     "timer.waitingForCustomer": "Čaká sa na príchod zákazníka",
     "timer.startNext": "Začať ďalšiu rezerváciu",
-    "timer.checkInNext": "Prihlásiť ďalšieho zákazníka" 
-  
+    "timer.checkInNext": "Prihlásiť ďalšieho zákazníka",
+    "timer.saving": "Ukladá sa...",
+    "currentAppointment.selectDuration": "Vyberte trvanie rezervácie",
+    "currentAppointment.customDuration": "Vlastné trvanie",
+    "currentAppointment.enterDuration": "Zadajte trvanie",
+    "currentAppointment.minutes": "minút"
   }

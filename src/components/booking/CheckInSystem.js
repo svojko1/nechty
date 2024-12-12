@@ -7,6 +7,7 @@ import { supabase } from "src/supabaseClient";
 
 // Import utility functions
 import { processCustomerArrival } from "src/utils/employeeAvailability";
+import { generateComboId } from "src/utils/comboUtils";
 
 // Import steps
 import InitialStep from "src/components/booking/checkin-steps/InitialStep";
@@ -184,15 +185,15 @@ const CheckIn = () => {
       };
 
       if (selectedService.isCombined) {
+        // Generate combo ID first - just like in QueueTester.js
+        const comboId = generateComboId(); // Import this from comboUtils.js
+
         // Handle combined Manikura + Pedikura service
         const manikuraData = {
           ...baseData,
           service_id: selectedService.id,
-        };
-
-        const pedikuraData = {
-          ...baseData,
-          service_id: selectedService.secondaryServiceId,
+          is_combo: true, // Add this
+          combo_id: comboId, // Add this
         };
 
         // First process manikura
@@ -207,21 +208,20 @@ const CheckIn = () => {
           );
         }
 
-        // Always add pedikura to queue
-        const { data: queueEntry, error: queueError } = await supabase
-          .from("customer_queue")
-          .insert({
-            facility_id: selectedFacility.id,
-            customer_name: customerData.customer_name,
-            email: customerData.email,
-            phone: customerData.phone,
-            service_id: selectedService.secondaryServiceId,
-            status: "waiting",
-          })
-          .select()
-          .single();
+        // // Queue entry for pedicure - now with combo info
+        // const { data: queueEntry, error: queueError } = await supabase
+        //   .from("customer_queue")
+        //   .insert({
+        //     ...baseData,
+        //     service_id: selectedService.secondaryServiceId,
+        //     status: "waiting",
+        //     is_combo: true, // Add this
+        //     combo_id: comboId, // Add this
+        //   })
+        //   .select()
+        //   .single();
 
-        if (queueError) throw queueError;
+        // if (queueError) throw queueError;
 
         // Handle the combined result based on manikura's status
         switch (manikuraResult.type) {

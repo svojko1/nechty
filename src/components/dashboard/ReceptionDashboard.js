@@ -46,6 +46,7 @@ import WaitingCustomersDisplay from "src/components/queue/WaitingCustomersDispla
 import QueueTester from "src/components/queue/QueueTester";
 import EmployeeQueueDisplay from "src/components/queue/EmployeeQueueDisplay";
 import PedicureStatusDisplay from "src/components/PedicureStatusDisplay";
+import ComboAppointmentsTable from "./ComboAppointmentsTable";
 
 const ReceptionDashboard = () => {
   const navigate = useNavigate();
@@ -204,7 +205,34 @@ const ReceptionDashboard = () => {
       const { data, error } = await query;
 
       if (error) throw error;
-      setAppointments(data);
+
+      // Group combo services
+      const processedAppointments = [];
+      const comboMap = new Map();
+
+      data.forEach((appointment) => {
+        if (appointment.combo_id) {
+          // Changed from is_combo to combo_id check
+          if (!comboMap.has(appointment.combo_id)) {
+            comboMap.set(appointment.combo_id, []);
+          }
+          comboMap.get(appointment.combo_id).push(appointment);
+        } else {
+          processedAppointments.push(appointment);
+        }
+      });
+
+      comboMap.forEach((comboGroup) => {
+        // Add all appointments in the combo group
+        comboGroup.forEach((appointment) => {
+          processedAppointments.push({
+            ...appointment,
+            comboGroup: comboGroup, // Add reference to full combo group if needed
+          });
+        });
+      });
+
+      setAppointments(processedAppointments);
     } catch (error) {
       console.error("Error fetching appointments:", error);
       toast.error("Failed to fetch appointments");
@@ -214,39 +242,98 @@ const ReceptionDashboard = () => {
   };
 
   const getAppointmentStatus = (appointment) => {
-    if (appointment.status === "completed" && !appointment.is_paid)
-      return "ukoncene";
+    // Check if this appointment is part of a combo
+    if (appointment.combo_id) {
+      // Find all appointments in the same combo group
+      const comboAppointments = appointments.filter(
+        (app) => app.combo_id === appointment.combo_id
+      );
+
+      // Check status of all appointments in the combo
+      const allCompleted = comboAppointments.every(
+        (app) => app.status === "completed"
+      );
+      const allPaid = comboAppointments.every((app) => app.is_paid);
+      const anyInProgress = comboAppointments.some(
+        (app) => app.status === "in_progress"
+      );
+
+      if (allCompleted && allPaid) return "zaplatene";
+      if (allCompleted) return "ukoncene";
+      if (anyInProgress) return "nezaplatene";
+      return "nezaplatene";
+    }
+
+    // Handle non-combo appointments
     if (appointment.status === "completed" && appointment.is_paid)
       return "zaplatene";
+    if (appointment.status === "completed") return "ukoncene";
     if (appointment.status === "in_progress") return "nezaplatene";
-    return "ukoncene";
+    return "nezaplatene";
   };
 
   const getStatusBadge = (status) => {
     switch (status) {
       case "nezaplatene":
-        return <Badge className="bg-red-500 text-white">Nezaplatené</Badge>;
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-red-100 text-red-800 border-red-200"
+          >
+            Nezaplatené
+          </Badge>
+        );
       case "ukoncene":
-        return <Badge className="bg-yellow-500 text-white">Dokončené</Badge>;
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-yellow-100 text-yellow-800 border-yellow-200"
+          >
+            Dokončené
+          </Badge>
+        );
       case "zaplatene":
-        return <Badge className="bg-green-500 text-white">Zaplatené</Badge>;
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-green-100 text-green-800 border-green-200"
+          >
+            Zaplatené
+          </Badge>
+        );
       default:
         return null;
     }
   };
 
-  const handleMarkAsPaid = async (appointmentId) => {
+  const handleMarkAsPaid = async (idOrComboId) => {
     try {
-      const { error } = await supabase
-        .from("appointments")
-        .update({ is_paid: true })
-        .eq("id", appointmentId);
+      // Check if this is a combo_id
+      const appointmentsToUpdate = appointments.filter(
+        (app) => app.combo_id === idOrComboId || app.id === idOrComboId
+      );
 
-      if (error) throw error;
-      toast.success("Appointment marked as paid successfully");
+      await Promise.all(
+        appointmentsToUpdate.map(async (app) => {
+          const { error } = await supabase
+            .from("appointments")
+            .update({ is_paid: true })
+            .eq("id", app.id);
+
+          if (error) throw error;
+        })
+      );
+
+      toast.success(
+        appointmentsToUpdate.length > 1
+          ? "Combo služby boli označené ako zaplatené"
+          : "Služba bola označená ako zaplatená"
+      );
+
+      fetchAppointments();
     } catch (error) {
       console.error("Error marking appointment as paid:", error);
-      toast.error("Failed to mark appointment as paid");
+      toast.error("Nepodarilo sa označiť služby ako zaplatené");
     }
   };
 
@@ -267,7 +354,7 @@ const ReceptionDashboard = () => {
   );
 
   return (
-    <div className=" space-y-4">
+    <div className="container mx-auto max-w-[1400px] space-y-4 px-4">
       {userFacilityId && (
         <EmployeeQueueDisplay className="mb-10" facilityId={userFacilityId} />
       )}
@@ -339,81 +426,12 @@ const ReceptionDashboard = () => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Stav</TableHead>
-                    <TableHead>Zamestnanec</TableHead>
-                    <TableHead>Stôl</TableHead>
-                    <TableHead>Klient</TableHead>
-                    <TableHead>Služba</TableHead>
-                    <TableHead>Dátum a čas</TableHead>
-                    <TableHead>Cena</TableHead>
-                    <TableHead>Akcia</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredAppointments.map((appointment) => {
-                    const status = getAppointmentStatus(appointment);
-                    return (
-                      <TableRow key={appointment.id}>
-                        <TableCell>{getStatusBadge(status)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center">
-                            <User className="mr-2 h-4 w-4 text-gray-500" />
-                            <span>
-                              {appointment.employees?.users?.first_name}{" "}
-                              {appointment.employees?.users?.last_name}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center">
-                            <TableIcon className="mr-2 h-4 w-4 text-gray-500" />
-                            {appointment.employees?.table_number || "-"}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p>{appointment.email}</p>
-                            <p className="text-sm text-gray-500">
-                              {appointment.phone}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>{appointment.services?.name}</TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <div className="flex items-center">
-                            <Clock className="mr-2 h-4 w-4 text-gray-500" />
-                            {format(
-                              new Date(appointment.start_time),
-                              "d. MMMM yyyy HH:mm",
-                              { locale: sk }
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center">
-                            <Clipboard className="mr-2 h-4 w-4 text-gray-500" />
-                            {appointment.price ? `${appointment.price} €` : "-"}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {status === "ukoncene" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleMarkAsPaid(appointment.id)}
-                            >
-                              Označiť ako zaplatené
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <ComboAppointmentsTable
+                appointments={filteredAppointments}
+                onMarkAsPaid={handleMarkAsPaid}
+                getStatusBadge={getStatusBadge}
+                getAppointmentStatus={getAppointmentStatus}
+              />
             </div>
           )}
         </CardContent>

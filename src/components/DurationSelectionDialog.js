@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Clock, ChevronRight } from "lucide-react";
-import { supabase } from "src/supabaseClient";
+import { supabase } from "../supabaseClient";
+import { useLanguage } from "./contexts/LanguageContext";
 
 import {
   Dialog,
@@ -21,12 +22,12 @@ import {
 } from "src/components/ui/select";
 
 const DURATION_PRESETS = [
-  { value: "15", label: "15 min" },
-  { value: "30", label: "30 min" },
-  { value: "45", label: "45 min" },
-  { value: "60", label: "60 min" },
-  { value: "90", label: "90 min" },
-  { value: "custom", label: "Custom duration" },
+  { value: "15", duration: 15 },
+  { value: "30", duration: 30 },
+  { value: "45", duration: 45 },
+  { value: "60", duration: 60 },
+  { value: "90", duration: 90 },
+  { value: "custom", duration: null },
 ];
 
 const DurationSelectionDialog = ({
@@ -36,6 +37,8 @@ const DurationSelectionDialog = ({
   onDurationSet,
   defaultDuration = "30",
 }) => {
+  const { t } = useLanguage();
+
   const [duration, setDuration] = useState(defaultDuration);
   const [isCustomDuration, setIsCustomDuration] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -104,10 +107,10 @@ const DurationSelectionDialog = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Set Appointment Duration
+            {t("currentAppointment.duration")}
           </DialogTitle>
           <DialogDescription>
-            Choose how long the appointment will take
+            {t("currentAppointment.selectDuration")}
           </DialogDescription>
         </DialogHeader>
 
@@ -117,12 +120,16 @@ const DurationSelectionDialog = ({
             onValueChange={handleDurationChange}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select duration" />
+              <SelectValue
+                placeholder={t("currentAppointment.selectDuration")}
+              />
             </SelectTrigger>
             <SelectContent>
               {DURATION_PRESETS.map((preset) => (
                 <SelectItem key={preset.value} value={preset.value}>
-                  {preset.label}
+                  {preset.value === "custom"
+                    ? t("currentAppointment.customDuration")
+                    : `${preset.duration} ${t("currentAppointment.minutes")}`}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -134,19 +141,21 @@ const DurationSelectionDialog = ({
                 type="number"
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
-                placeholder="Enter duration in minutes"
+                placeholder={t("currentAppointment.enterDuration")}
                 className="flex-1"
                 min="1"
                 max="240"
               />
-              <span className="text-sm text-gray-500">minutes</span>
+              <span className="text-sm text-gray-500">
+                {t("currentAppointment.minutes")}
+              </span>
             </div>
           )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isLoading}>
-            Cancel
+            {t("timer.dialog.cancel")}
           </Button>
           <Button
             onClick={handleSubmit}
@@ -156,11 +165,11 @@ const DurationSelectionDialog = ({
             {isLoading ? (
               <div className="flex items-center gap-2">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                <span>Saving...</span>
+                <span>{t("timer.saving")}</span>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span>Set Duration</span>
+                <span>{t("timer.dialog.confirm")}</span>
                 <ChevronRight className="h-4 w-4" />
               </div>
             )}

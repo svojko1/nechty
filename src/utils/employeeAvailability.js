@@ -3,6 +3,7 @@
 import { se } from "date-fns/locale";
 import { supabase } from "../supabaseClient";
 import { createAppointmentData } from "./appointmentUtils";
+import { generateComboId } from "./comboUtils";
 
 /**
  * Handle employee check-in at the start of their shift
@@ -232,6 +233,9 @@ export const processCustomerArrival = async (customerData, facilityId) => {
     // Start transaction
     const client = await supabase.rpc("begin_transaction");
 
+    // Generate combo ID if it's a combo service
+    const comboId = customerData.is_combo ? generateComboId() : null;
+
     try {
       // Get daily queue status
       let { data: dailyQueue } = await supabase
@@ -272,11 +276,12 @@ export const processCustomerArrival = async (customerData, facilityId) => {
           await supabase.from("customer_queue").insert({
             facility_id: facilityId,
             customer_name: customerData.customer_name,
-            email: customerData.email || null, // Separate email field
-            phone: customerData.phone || null, // Separate phone field
+            email: customerData.email || null,
+            phone: customerData.phone || null,
             service_id: pedicureService.id,
             status: "waiting",
             is_combo: true,
+            combo_id: comboId,
           });
         }
       };
@@ -439,6 +444,7 @@ export const processCustomerArrival = async (customerData, facilityId) => {
             end_time: endTime.toISOString(),
             status: "in_progress",
             arrival_time: now.toISOString(),
+            combo_id: comboId,
           })
           .select()
           .single();
@@ -522,6 +528,8 @@ export const processCustomerArrival = async (customerData, facilityId) => {
           phone: customerData.phone || null,
           service_id: customerData.service_id,
           status: "waiting",
+          is_combo: customerData.is_combo || false,
+          combo_id: comboId,
         })
         .select()
         .single();

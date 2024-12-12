@@ -117,6 +117,8 @@ const AssignEmployeeDialog = ({
           end_time: endTime.toISOString(),
           status: "in_progress",
           arrival_time: customer.created_at,
+          combo_id: customer.combo_id || null, // Pass the combo_id from customer_queue
+          is_combo: customer.is_combo || false, // Also ensure is_combo flag is passed
         })
         .select()
         .single();

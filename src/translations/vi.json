@@ -74,5 +74,10 @@
     "timer.customerArrived":  "Khách hàng đã đến",
     "timer.waitingForCustomer":  "Đang đợi khách hàng đến",
     "timer.startNext": "Bắt đầu cuộc hẹn tiếp theo",
-    "timer.checkInNext":"Đăng ký khách hàng tiếp theo"
+    "timer.checkInNext":"Đăng ký khách hàng tiếp theo",
+    "timer.saving": "Đang lưu...",
+    "currentAppointment.selectDuration": "Chọn thời lượng cuộc hẹn",
+    "currentAppointment.customDuration": "Thời lượng tùy chỉnh",
+    "currentAppointment.enterDuration": "Nhập thời lượng",
+    "currentAppointment.minutes": "phút"
   }
